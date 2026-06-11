@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RaptorVault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root[data-theme="dark"]{
+  --bg:#0e1116; --bg2:#151a21; --surface:#1a202a; --surface2:#212935;
+  --border:#2a3340; --text:#e8ecf2; --muted:#8b96a5; --faint:#5d6776;
+  --gold:#e8b14e; --gold-dim:#b8893a; --gold-bg:rgba(232,177,78,.12);
+  --red:#f0635a; --red-bg:rgba(240,99,90,.12);
+  --green:#34c98b; --green-bg:rgba(52,201,139,.12);
+  --teal:#4ec9c0; --teal-bg:rgba(78,201,192,.12);
+  --purple:#9d8cff; --purple-bg:rgba(157,140,255,.12);
+  --shadow:0 8px 30px rgba(0,0,0,.35);
+}
+:root[data-theme="light"]{
+  --bg:#f4f3ef; --bg2:#ecebe5; --surface:#ffffff; --surface2:#f7f6f2;
+  --border:#dcdad2; --text:#1d2430; --muted:#5f6a78; --faint:#98a1ad;
+  --gold:#b8893a; --gold-dim:#9a7230; --gold-bg:rgba(184,137,58,.12);
+  --red:#d2453c; --red-bg:rgba(210,69,60,.10);
+  --green:#1d9e6f; --green-bg:rgba(29,158,111,.10);
+  --teal:#178f86; --teal-bg:rgba(23,143,134,.10);
+  --purple:#6c5ce7; --purple-bg:rgba(108,92,231,.10);
+  --shadow:0 8px 24px rgba(30,35,45,.08);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:15px;min-height:100vh}
+h1,h2,h3,.brand{font-family:'Space Grotesk',sans-serif}
+button{font-family:'Inter',sans-serif;cursor:pointer}
+input,select,textarea{font-family:'Inter',sans-serif;font-size:15px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--gold)}
+label{font-size:12.5px;color:var(--muted);display:block;margin:10px 0 5px;font-weight:500}
+::placeholder{color:var(--faint)}
+.hidden{display:none!important}
+
+/* ---------- Login ---------- */
+#loginScreen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.login-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:36px 30px;box-shadow:var(--shadow)}
+.vault-logo{width:64px;height:64px;border-radius:16px;background:var(--gold-bg);border:1px solid var(--gold);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:30px}
+.login-card h1{text-align:center;font-size:24px;letter-spacing:.5px}
+.login-card .sub{text-align:center;color:var(--muted);font-size:13px;margin:4px 0 20px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:10px;padding:11px 18px;font-size:14.5px;font-weight:600;transition:transform .08s, opacity .15s}
+.btn:active{transform:scale(.97)}
+.btn-gold{background:var(--gold);color:#1a1408;width:100%}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red)}
+.btn-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green)}
+.btn-sm{padding:7px 12px;font-size:13px;border-radius:8px}
+.err{color:var(--red);font-size:13px;text-align:center;margin-top:12px;min-height:18px}
+.alink{background:none;border:none;color:var(--gold);font-size:13px;font-weight:600;padding:2px}
+
+/* ---------- Shell ---------- */
+#app{max-width:1100px;margin:0 auto;padding:0 16px 90px}
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 0 10px;gap:10px}
+.brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700;letter-spacing:.4px}
+.brand .mini-logo{width:36px;height:36px;border-radius:10px;background:var(--gold-bg);border:1px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:18px}
+.brand span b{color:var(--gold)}
+.hdr-actions{display:flex;gap:8px;align-items:center}
+.icon-btn{width:38px;height:38px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:16px;display:flex;align-items:center;justify-content:center}
+nav{display:flex;gap:6px;overflow-x:auto;padding:6px 0 14px;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;background:var(--surface);border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:9px 15px;font-size:13.5px;font-weight:600;display:flex;gap:7px;align-items:center}
+.tab.active{background:var(--gold-bg);border-color:var(--gold);color:var(--gold)}
+.page-title{font-size:19px;margin:6px 0 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+/* ---------- Cards & grids ---------- */
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+.stat .lbl{font-size:12.5px;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:6px}
+.stat .val{font-size:24px;font-weight:700;font-family:'Space Grotesk';margin-top:5px}
+.blurred{filter:blur(9px);transition:filter .25s;cursor:pointer;user-select:none}
+.unblurred{filter:none;transition:filter .25s;cursor:pointer}
+.sec-title{font-size:14.5px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13.5px}
+.row:last-child{border-bottom:none}
+.chip{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.chip-red{background:var(--red-bg);color:var(--red)}
+.chip-green{background:var(--green-bg);color:var(--green)}
+.chip-gold{background:var(--gold-bg);color:var(--gold)}
+.chip-teal{background:var(--teal-bg);color:var(--teal)}
+.chip-purple{background:var(--purple-bg);color:var(--purple)}
+.muted{color:var(--muted)} .small{font-size:12.5px} .red{color:var(--red)} .green{color:var(--green)} .gold{color:var(--gold)}
+.bar-wrap{height:9px;background:var(--surface2);border-radius:6px;overflow:hidden;margin-top:5px}
+.bar{height:100%;border-radius:6px}
+.bar-row{margin-bottom:13px}
+.bar-row .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:2px}
+.empty{color:var(--faint);font-size:13.5px;text-align:center;padding:18px 0}
+.del{background:none;border:none;color:var(--faint);font-size:14px;padding:4px}
+.del:hover{color:var(--red)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+@media(max-width:560px){.form-grid{grid-template-columns:1fr}}
+
+/* ---------- FAB & Modal ---------- */
+#fab{position:fixed;right:20px;bottom:24px;width:58px;height:58px;border-radius:50%;background:var(--gold);color:#1a1408;border:none;font-size:26px;box-shadow:var(--shadow);z-index:40;display:flex;align-items:center;justify-content:center}
+#modalRoot{position:fixed;inset:0;background:rgba(8,10,14,.65);backdrop-filter:blur(3px);z-index:60;display:flex;align-items:center;justify-content:center;padding:18px}
+.modal{width:100%;max-width:430px;max-height:88vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;box-shadow:var(--shadow)}
+.modal h3{font-size:17px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.modal .x{background:none;border:none;color:var(--muted);font-size:18px}
+.modal .actions{display:flex;gap:10px;margin-top:18px}
+.modal .actions .btn{flex:1}
+
+/* ---------- Toast ---------- */
+#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--gold);color:var(--text);border-radius:12px;padding:11px 20px;font-size:13.5px;font-weight:500;opacity:0;transition:all .25s;z-index:80;pointer-events:none;box-shadow:var(--shadow);white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.loading{text-align:center;color:var(--faint);padding:30px 0;font-size:13.5px}
+.month-nav{display:flex;align-items:center;gap:8px}
+.month-nav button{width:30px;height:30px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text)}
+.month-nav span{font-size:13.5px;font-weight:600;min-width:86px;text-align:center}
+.seg{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:10px 0}
+.seg button{flex:1;border:none;background:none;color:var(--muted);padding:9px;font-size:13px;font-weight:600}
+.seg button.on{background:var(--gold-bg);color:var(--gold)}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="vault-logo">🦅</div>
+    <h1>Raptor<span class="gold">Vault</span></h1>
+    <p class="sub">Your personal money & life command center</p>
+    <div id="authLogin">
+      <label>Email</label>
+      <input id="loginEmail" type="email" autocomplete="email" placeholder="you@email.com">
+      <label>Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••">
+      <div style="height:18px"></div>
+      <button class="btn btn-gold" id="loginBtn">Unlock vault</button>
+      <div style="display:flex;justify-content:space-between;margin-top:14px">
+        <button class="alink" id="toSignup">Create account</button>
+        <button class="alink" id="toForgot">Forgot password?</button>
+      </div>
+    </div>
+    <div id="authSignup" class="hidden">
+      <label>Your name</label>
+      <input id="suName" placeholder="Diwan">
+      <label>Email</label>
+      <input id="suEmail" type="email" placeholder="you@email.com">
+      <label>Password (6+ characters)</label>
+      <input id="suPass" type="password" placeholder="••••••••">
+      <div style="height:18px"></div>
+      <button class="btn btn-gold" id="signupBtn">Create account</button>
+      <div style="text-align:center;margin-top:14px"><button class="alink" id="toLogin1">← Back to login</button></div>
+    </div>
+    <div id="authForgot" class="hidden">
+      <label>Email</label>
+      <input id="fpEmail" type="email" placeholder="you@email.com">
+      <div style="height:18px"></div>
+      <button class="btn btn-gold" id="forgotBtn">Send reset link</button>
+      <div style="text-align:center;margin-top:14px"><button class="alink" id="toLogin2">← Back to login</button></div>
+    </div>
+    <div id="authReset" class="hidden">
+      <p class="sub">Set your new password</p>
+      <label>New password (6+ characters)</label>
+      <input id="rpPass" type="password" placeholder="••••••••">
+      <div style="height:18px"></div>
+      <button class="btn btn-gold" id="resetBtn">Set new password</button>
+    </div>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app" class="hidden">
+  <header>
+    <div class="brand"><div class="mini-logo">🦅</div><span>Raptor<b>Vault</b></span></div>
+    <div class="hdr-actions">
+      <button class="icon-btn" id="themeBtn" title="Toggle theme">🌙</button>
+      <button class="icon-btn" id="logoutBtn" title="Logout">⎋</button>
+    </div>
+  </header>
+  <nav id="nav"></nav>
+  <main id="main"><div class="loading">Loading…</div></main>
+</div>
+
+<button id="fab" class="hidden" title="Quick spend">＋</button>
+<div id="modalRoot" class="hidden"></div>
+<div id="toast"></div>
+
+<script>
+/* =====================================================
+   CONFIG — paste your Supabase publishable key below
+===================================================== */
+const SB_URL = "https://nsngvbzninahlazarbyi.supabase.co";
+const SB_KEY = "PASTE_YOUR_PUBLISHABLE_KEY_HERE";
+
+/* ---------------- Supabase REST helpers ---------------- */
+const sbHeaders = () => ({
+  "apikey": SB_KEY,
+  "Authorization": "Bearer " + (SESSION ? SESSION.access_token : SB_KEY),
+  "Content-Type": "application/json",
+  "Prefer": "return=representation"
+});
+async function sbQuery(table, params) {
+  await freshToken();
+  const r = await fetch(SB_URL + "/rest/v1/" + table + "?" + (params || "select=*"), { headers: sbHeaders() });
+  if (!r.ok) { console.error(await r.text()); return []; }
+  return r.json();
+}
+async function sbInsert(table, data) {
+  await freshToken();
+  const r = await fetch(SB_URL + "/rest/v1/" + table, { method: "POST", headers: sbHeaders(), body: JSON.stringify(data) });
+  if (!r.ok) { console.error(await r.text()); toast("Save failed"); return null; }
+  return r.json();
+}
+async function sbUpdate(table, match, data) {
+  await freshToken();
+  const r = await fetch(SB_URL + "/rest/v1/" + table + "?" + match, { method: "PATCH", headers: sbHeaders(), body: JSON.stringify(data) });
+  if (!r.ok) { console.error(await r.text()); toast("Update failed"); return null; }
+  return r.json();
+}
+async function sbDelete(table, match) {
+  await freshToken();
+  const r = await fetch(SB_URL + "/rest/v1/" + table + "?" + match, { method: "DELETE", headers: sbHeaders() });
+  if (!r.ok) { console.error(await r.text()); toast("Delete failed"); }
+}
+
+/* ---------------- Utils ---------------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = n => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const fmtD = n => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+function curMonth(offset) {
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + (offset || 0));
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+function monthLabel(m) {
+  const [y, mo] = m.split("-");
+  return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+mo - 1] + " " + y;
+}
+function shiftMonth(m, delta) {
+  const [y, mo] = m.split("-").map(Number);
+  const d = new Date(y, mo - 1 + delta, 1);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+const todayStr = () => new Date().toISOString().slice(0, 10);
+function dateLabel(d) {
+  if (!d) return "";
+  const dt = new Date(d + (d.length === 10 ? "T00:00:00" : ""));
+  return dt.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+function dtLabel(ts) {
+  const dt = new Date(ts);
+  return dt.toLocaleDateString("en-IN", { day: "numeric", month: "short" }) + ", " +
+         dt.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+}
+async function sha256(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+let toastTimer = null;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+/* ---------------- Modal ---------------- */
+function openModal(html) {
+  const root = $("modalRoot");
+  root.innerHTML = '<div class="modal">' + html + '</div>';
+  root.classList.remove("hidden");
+  root.onclick = e => { if (e.target === root) closeModal(); };
+}
+function closeModal() { $("modalRoot").classList.add("hidden"); $("modalRoot").innerHTML = ""; }
+
+/* ---------------- Theme & session ---------------- */
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  localStorage.setItem("rv_theme", t);
+  $("themeBtn").textContent = t === "dark" ? "🌙" : "☀️";
+}
+$("themeBtn").onclick = () => applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+$("logoutBtn").onclick = async () => {
+  try { await authPost("logout", {}, SESSION && SESSION.access_token); } catch (e) {}
+  saveSession(null); location.reload();
+};
+
+/* ---------------- Supabase Auth ---------------- */
+let SESSION = null;
+let recoveryToken = null;
+function saveSession(s) {
+  if (!s) { localStorage.removeItem("rv_session"); SESSION = null; return; }
+  if (!s.expires_at_ms) s.expires_at_ms = Date.now() + (s.expires_in ? s.expires_in * 1000 : 3600000);
+  SESSION = s; localStorage.setItem("rv_session", JSON.stringify(s));
+}
+async function authPost(path, body, token) {
+  const headers = { "apikey": SB_KEY, "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = "Bearer " + token;
+  const r = await fetch(SB_URL + "/auth/v1/" + path, { method: "POST", headers: headers, body: JSON.stringify(body || {}) });
+  let d = {}; try { d = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(d.msg || d.error_description || d.message || "Something went wrong");
+  return d;
+}
+async function freshToken() {
+  if (!SESSION) return;
+  if (Date.now() < SESSION.expires_at_ms - 60000) return;
+  try {
+    const d = await authPost("token?grant_type=refresh_token", { refresh_token: SESSION.refresh_token });
+    saveSession(d);
+  } catch (e) { saveSession(null); location.reload(); }
+}
+function authView(id) {
+  ["authLogin", "authSignup", "authForgot", "authReset"].forEach(v => $(v).classList.toggle("hidden", v !== id));
+  $("loginErr").textContent = "";
+}
+$("toSignup").onclick = () => authView("authSignup");
+$("toForgot").onclick = () => authView("authForgot");
+$("toLogin1").onclick = () => authView("authLogin");
+$("toLogin2").onclick = () => authView("authLogin");
+
+$("loginBtn").onclick = async () => {
+  const e = $("loginEmail").value.trim(), p = $("loginPass").value;
+  if (!e || !p) { $("loginErr").textContent = "Enter email and password"; return; }
+  $("loginBtn").textContent = "Unlocking…";
+  try {
+    const d = await authPost("token?grant_type=password", { email: e, password: p });
+    saveSession(d); startApp();
+  } catch (err) {
+    $("loginErr").textContent = err.message === "Invalid login credentials" ? "Wrong email or password" : err.message;
+  }
+  $("loginBtn").textContent = "Unlock vault";
+};
+$("loginPass").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn").click(); });
+
+$("signupBtn").onclick = async () => {
+  const n = $("suName").value.trim(), e = $("suEmail").value.trim(), p = $("suPass").value;
+  if (!n || !e || p.length < 6) { $("loginErr").textContent = "Fill everything (password 6+ chars)"; return; }
+  $("signupBtn").textContent = "Creating…";
+  try {
+    const d = await authPost("signup", { email: e, password: p, data: { display_name: n } });
+    if (d.access_token) { saveSession(d); startApp(); }
+    else { authView("authLogin"); $("loginErr").textContent = "Check your email to confirm, then login ✉️"; }
+  } catch (err) { $("loginErr").textContent = err.message; }
+  $("signupBtn").textContent = "Create account";
+};
+
+$("forgotBtn").onclick = async () => {
+  const e = $("fpEmail").value.trim();
+  if (!e) { $("loginErr").textContent = "Enter your email"; return; }
+  $("forgotBtn").textContent = "Sending…";
+  try {
+    await authPost("recover?redirect_to=" + encodeURIComponent(location.origin + location.pathname), { email: e });
+    $("loginErr").textContent = "Reset link sent — check your email ✉️";
+  } catch (err) { $("loginErr").textContent = err.message; }
+  $("forgotBtn").textContent = "Send reset link";
+};
+
+$("resetBtn").onclick = async () => {
+  const p = $("rpPass").value;
+  if (p.length < 6) { $("loginErr").textContent = "Password must be 6+ chars"; return; }
+  try {
+    const r = await fetch(SB_URL + "/auth/v1/user", { method: "PUT", headers: { "apikey": SB_KEY, "Content-Type": "application/json", "Authorization": "Bearer " + recoveryToken }, body: JSON.stringify({ password: p }) });
+    if (!r.ok) { const d = await r.json(); throw new Error(d.msg || "Could not set password"); }
+    history.replaceState(null, "", location.pathname);
+    authView("authLogin"); $("loginErr").textContent = "Password updated — login now ✅";
+  } catch (err) { $("loginErr").textContent = err.message; }
+};
+
+/* ---------------- Navigation ---------------- */
+const TABS = [
+  { id: "dashboard", label: "Dashboard", icon: "📊" },
+  { id: "spends",    label: "Spends",    icon: "💸" },
+  { id: "bills",     label: "Bills",     icon: "📅" },
+  { id: "loans",     label: "Loans",     icon: "🏦" },
+  { id: "cards",     label: "Cards",     icon: "💳" },
+  { id: "dues",      label: "Dues",      icon: "🤝" },
+  { id: "snacks",    label: "Snacks",    icon: "🍪" },
+  { id: "health",    label: "Health",    icon: "❤️" }
+];
+let activeTab = "dashboard";
+let ACCOUNTS = [];
+
+function renderNav() {
+  $("nav").innerHTML = TABS.map(t =>
+    '<button class="tab' + (t.id === activeTab ? " active" : "") + '" data-tab="' + t.id + '">' + t.icon + " " + t.label + "</button>"
+  ).join("");
+  $("nav").querySelectorAll(".tab").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+}
+function switchTab(id) {
+  activeTab = id; renderNav();
+  $("main").innerHTML = '<div class="loading">Loading…</div>';
+  ({ dashboard: renderDashboard, spends: renderSpends, bills: renderBills, loans: renderLoans,
+     cards: renderCards, dues: renderDues, snacks: renderSnacks, health: renderHealth }[id])();
+}
+
+async function startApp() {
+  $("loginScreen").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("fab").classList.remove("hidden");
+  await ensureDefaultAccounts();
+  await ensureMonthlyData();
+  renderNav();
+  switchTab("dashboard");
+}
+$("fab").onclick = () => quickSpendModal();
+
+async function ensureDefaultAccounts() {
+  ACCOUNTS = await sbQuery("accounts", "select=*&is_active=eq.true&order=sort_order");
+  if (!ACCOUNTS.length) {
+    await sbInsert("accounts", [
+      { name: "OneCard", type: "credit_card", sort_order: 1 },
+      { name: "RBL Credit Card", type: "credit_card", sort_order: 2 },
+      { name: "Kotak Credit Card", type: "credit_card", sort_order: 3 },
+      { name: "GPay - Kotak Savings", type: "bank", sort_order: 4 },
+      { name: "South Indian Bank", type: "bank", sort_order: 5 },
+      { name: "Cash", type: "cash", sort_order: 6 }
+    ]);
+    ACCOUNTS = await sbQuery("accounts", "select=*&is_active=eq.true&order=sort_order");
+  }
+}
+
+/* Generate this month's bill instances + split collections if missing */
+async function ensureMonthlyData() {
+  const m = curMonth();
+  const [tpls, inst] = await Promise.all([
+    sbQuery("recurring_bills", "select=*&is_active=eq.true"),
+    sbQuery("bill_instances", "select=recurring_bill_id&month=eq." + m)
+  ]);
+  const have = new Set(inst.map(i => i.recurring_bill_id));
+  for (const t of tpls) {
+    if (!have.has(t.id)) {
+      const day = Math.min(t.due_day, 28);
+      await sbInsert("bill_instances", { recurring_bill_id: t.id, name: t.name, amount: t.amount, month: m, due_date: m + "-" + String(day).padStart(2, "0") });
+    }
+  }
+  const [splits, cols] = await Promise.all([
+    sbQuery("recurring_splits", "select=*,recurring_split_members(*)&is_active=eq.true"),
+    sbQuery("split_collections", "select=member_id&month=eq." + m)
+  ]);
+  const haveCol = new Set(cols.map(c => c.member_id));
+  for (const s of splits) {
+    for (const mem of (s.recurring_split_members || [])) {
+      if (!haveCol.has(mem.id)) {
+        await sbInsert("split_collections", { split_id: s.id, member_id: mem.id, person: mem.person, month: m, amount: mem.share_amount });
+      }
+    }
+  }
+}
+
+/* =====================================================
+   DASHBOARD
+===================================================== */
+async function renderDashboard() {
+  const m = curMonth();
+  const [salaries, spends, loans, cardBills, bills, lendings, splitCols, otMembers, snacks] = await Promise.all([
+    sbQuery("salaries", "select=amount&month=eq." + m),
+    sbQuery("spends", "select=amount&spent_at=gte." + m + "-01"),
+    sbQuery("loans", "select=*&status=eq.active&order=outstanding.desc"),
+    sbQuery("card_bills", "select=*,accounts(name)&month=eq." + m),
+    sbQuery("bill_instances", "select=*&month=eq." + m + "&order=due_date"),
+    sbQuery("lendings", "select=*&status=eq.pending&order=expected_date"),
+    sbQuery("split_collections", "select=*,recurring_splits(name)&month=eq." + m + "&status=eq.pending"),
+    sbQuery("onetime_split_members", "select=*,onetime_splits(title)&status=eq.pending"),
+    sbQuery("snack_entries", "select=amount&entry_type=eq.sale&status=eq.pending")
+  ]);
+  if (activeTab !== "dashboard") return;
+
+  const salary = salaries.reduce((a, b) => a + +b.amount, 0);
+  const spent = spends.reduce((a, b) => a + +b.amount, 0);
+  const loanDebt = loans.reduce((a, b) => a + +b.outstanding, 0);
+  const cardDebt = cardBills.filter(c => c.status === "pending").reduce((a, b) => a + +b.amount_due, 0);
+  const oweMe = lendings.reduce((a, b) => a + +b.amount, 0)
+    + splitCols.reduce((a, b) => a + +b.amount, 0)
+    + otMembers.reduce((a, b) => a + +b.amount, 0)
+    + snacks.reduce((a, b) => a + +b.amount, 0);
+
+  const today = todayStr();
+  const pendingBills = bills.filter(b => b.status === "pending");
+  const maxDebt = Math.max(...loans.map(l => +l.outstanding), ...cardBills.map(c => +c.amount_due), 1);
+
+  let debtBars = "";
+  loans.forEach(l => {
+    debtBars += '<div class="bar-row"><div class="top"><span>' + esc(l.name) + ' <span class="muted">· ' + l.months_paid + "/" + l.total_months + ' months</span></span><span class="muted">' + fmt(l.outstanding) + ' left</span></div><div class="bar-wrap"><div class="bar" style="width:' + Math.max(3, l.outstanding / maxDebt * 100) + '%;background:var(--gold)"></div></div></div>';
+  });
+  cardBills.forEach(c => {
+    if (c.status !== "pending") return;
+    debtBars += '<div class="bar-row"><div class="top"><span>' + esc(c.accounts ? c.accounts.name : "Card") + ' <span class="muted">· due ' + dateLabel(c.due_date) + '</span></span><span class="muted">' + fmt(c.amount_due) + '</span></div><div class="bar-wrap"><div class="bar" style="width:' + Math.max(3, c.amount_due / maxDebt * 100) + '%;background:var(--red)"></div></div></div>';
+  });
+  if (!debtBars) debtBars = '<div class="empty">No active debts. Vault is free! 🎉</div>';
+
+  const oweRows = [
+    ...lendings.map(l => ({ who: l.person, what: "lent on " + dateLabel(l.given_date), amt: +l.amount, due: l.expected_date })),
+    ...splitCols.map(s => ({ who: s.person, what: (s.recurring_splits ? s.recurring_splits.name : "split") + " " + monthLabel(s.month), amt: +s.amount })),
+    ...otMembers.map(o => ({ who: o.person, what: o.onetime_splits ? o.onetime_splits.title : "split", amt: +o.amount }))
+  ];
+
+  $("main").innerHTML =
+    '<div class="grid g4">' +
+      '<div class="card stat"><div class="lbl">🔒 Salary · ' + monthLabel(m) + '</div><div class="val blurred" id="salaryVal">' + fmt(salary) + '</div>' +
+        '<button class="btn btn-ghost btn-sm" style="margin-top:10px" id="setSalaryBtn">' + (salary ? "Edit" : "Set salary") + '</button></div>' +
+      '<div class="card stat"><div class="lbl">💸 Spent this month</div><div class="val">' + fmt(spent) + '</div>' +
+        '<div class="small muted" style="margin-top:10px">' + (salary ? Math.round(spent / salary * 100) + "% of salary" : "set salary to compare") + '</div></div>' +
+      '<div class="card stat"><div class="lbl">🏦 Total debt</div><div class="val">' + fmt(loanDebt + cardDebt) + '</div>' +
+        '<div class="small muted" style="margin-top:10px">' + fmt(loanDebt) + ' loans · ' + fmt(cardDebt) + ' cards</div></div>' +
+      '<div class="card stat"><div class="lbl">🤝 People owe me</div><div class="val ' + (oweMe ? "red" : "green") + '">' + fmt(oweMe) + '</div>' +
+        '<div class="small muted" style="margin-top:10px">' + oweRows.length + ' pending + snacks</div></div>' +
+    '</div>' +
+    '<div style="height:14px"></div>' +
+    '<div class="card"><div class="sec-title">📉 Debt breakdown <span class="small muted">gold = loans · red = cards</span></div>' + debtBars + '</div>' +
+    '<div style="height:14px"></div>' +
+    '<div class="grid g2">' +
+      '<div class="card"><div class="sec-title">📅 Bills this month</div>' +
+        (pendingBills.length ? pendingBills.map(b =>
+          '<div class="row"><span>' + esc(b.name) + '</span><span class="chip ' + (b.due_date < today ? "chip-red" : "chip-gold") + '">' + fmt(b.amount) + " · " + dateLabel(b.due_date) + (b.due_date < today ? " ⚠" : "") + '</span></div>'
+        ).join("") : '<div class="empty">All bills paid ✅</div>') + '</div>' +
+      '<div class="card"><div class="sec-title">🔴 Pending from people</div>' +
+        (oweRows.length ? oweRows.slice(0, 8).map(r =>
+          '<div class="row"><span class="red">' + esc(r.who) + ' <span class="muted small">· ' + esc(r.what) + '</span></span><span class="chip chip-red">' + fmt(r.amt) + '</span></div>'
+        ).join("") : '<div class="empty">Nobody owes you. Peaceful 😌</div>') + '</div>' +
+    '</div>';
+
+  let peek = null;
+  $("salaryVal").onclick = function () {
+    this.classList.remove("blurred"); this.classList.add("unblurred");
+    clearTimeout(peek);
+    peek = setTimeout(() => { this.classList.add("blurred"); this.classList.remove("unblurred"); }, 3000);
+  };
+  $("setSalaryBtn").onclick = () => salaryModal(m, salary);
+}
+
+function salaryModal(m, current) {
+  openModal('<h3>Salary · ' + monthLabel(m) + ' <button class="x" onclick="closeModal()">✕</button></h3>' +
+    '<label>Total amount received this month</label><input id="salAmt" type="number" inputmode="decimal" value="' + (current || "") + '" placeholder="e.g. 62000">' +
+    '<label>Note (optional)</label><input id="salNote" placeholder="Salary + incentive etc.">' +
+    '<div class="actions"><button class="btn btn-gold" id="salSave">Save</button></div>');
+  $("salSave").onclick = async () => {
+    const amt = +$("salAmt").value;
+    if (!amt) { toast("Enter amount"); return; }
+    const existing = await sbQuery("salaries", "select=id&month=eq." + m);
+    if (existing.length) await sbUpdate("salaries", "id=eq." + existing[0].id, { amount: amt, note: $("salNote").value });
+    else await sbInsert("salaries", { month: m, amount: amt, note: $("salNote").value });
+    closeModal(); toast("Salary saved 🔒"); renderDashboard();
+  };
+}
+
+/* =====================================================
+   SPENDS
+===================================================== */
+let spendsMonth = curMonth();
+function accountOptions(sel) {
+  return ACCOUNTS.map(a => '<option value="' + a.id + '"' + (sel == a.id ? " selected" : "") + '>' + esc(a.name) + '</option>').join("");
+}
+function quickSpendModal() {
+  openModal('<h3>Quick spend 💸 <button class="x" onclick="closeModal()">✕</button></h3>' +
+    '<label>What did you buy?</label><input id="qsItem" placeholder="Tea, lunch, petrol…">' +
+    '<label>Amount</label><input id="qsAmt" type="number" inputmode="decimal" placeholder="30">' +
+    '<label>Paid via</label><select id="qsAcc">' + accountOptions() + '</select>' +
+    '<label>Category (optional)</label><input id="qsCat" placeholder="Food, travel, shopping…">' +
+    '<div class="actions"><button class="btn btn-gold" id="qsSave">Add spend</button></div>');
+  $("qsItem").focus();
+  $("qsSave").onclick = async () => {
+    const item = $("qsItem").value.trim(), amt = +$("qsAmt").value;
+    if (!item || !amt) { toast("Item and amount needed"); return; }
+    await sbInsert("spends", { item: item, amount: amt, account_id: +$("qsAcc").value, category: $("qsCat").value.trim() || null });
+    closeModal(); toast(item + " · " + fmt(amt) + " added");
+    if (activeTab === "spends") renderSpends();
+    if (activeTab === "dashboard") renderDashboard();
+  };
+}
+
+async function renderSpends() {
+  const m = spendsMonth;
+  const next = shiftMonth(m, 1);
+  const rows = await sbQuery("spends", "select=*,accounts(name)&spent_at=gte." + m + "-01&spent_at=lt." + next + "-01&order=spent_at.desc");
+  if (activeTab !== "spends") return;
+  const total = rows.reduce((a, b) => a + +b.amount, 0);
+  const byAcc = {};
+  rows.forEach(r => { const n = r.accounts ? r.accounts.name : "—"; byAcc[n] = (byAcc[n] || 0) + +r.amount; });
+
+  $("main").innerHTML =
+    '<div class="page-title"><span>💸 Spends</span><div class="month-nav"><button id="spPrev">‹</button><span>' + monthLabel(m) + '</span><button id="spNext">›</button></div></div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">Total: <span class="gold">' + fmt(total) + '</span></div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' + Object.entries(byAcc).map(([k, v]) => '<span class="chip chip-teal">' + esc(k) + " · " + fmt(v) + '</span>').join("") + '</div></div>' +
+    '<div class="card">' +
+    (rows.length ? rows.map(r =>
+      '<div class="row"><span>' + esc(r.item) + '<br><span class="small muted">' + dtLabel(r.spent_at) + " · " + esc(r.accounts ? r.accounts.name : "") + (r.category ? " · " + esc(r.category) : "") + '</span></span>' +
+      '<span style="display:flex;align-items:center;gap:6px"><b>' + fmt(r.amount) + '</b><button class="del" data-id="' + r.id + '">🗑</button></span></div>'
+    ).join("") : '<div class="empty">No spends in ' + monthLabel(m) + '</div>') + '</div>';
+
+  $("spPrev").onclick = () => { spendsMonth = shiftMonth(spendsMonth, -1); renderSpends(); };
+  $("spNext").onclick = () => { spendsMonth = shiftMonth(spendsMonth, 1); renderSpends(); };
+  $("main").querySelectorAll(".del").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this spend?")) return;
+    await sbDelete("spends", "id=eq." + b.dataset.id); renderSpends();
+  });
+}
+
+/* =====================================================
+   BILLS
+===================================================== */
+async function renderBills() {
+  const m = curMonth();
+  const [inst, tpls] = await Promise.all([
+    sbQuery("bill_instances", "select=*&month=eq." + m + "&order=due_date"),
+    sbQuery("recurring_bills", "select=*&is_active=eq.true&order=due_day")
+  ]);
+  if (activeTab !== "bills") return;
+  const today = todayStr();
+
+  $("main").innerHTML =
+    '<div class="page-title"><span>📅 Bills · ' + monthLabel(m) + '</span><button class="btn btn-ghost btn-sm" id="addBillBtn">+ Add monthly bill</button></div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">This month</div>' +
+    (inst.length ? inst.map(b => {
+      const overdue = b.status === "pending" && b.due_date < today;
+      return '<div class="row"><span class="' + (overdue ? "red" : "") + '">' + esc(b.name) + '<br><span class="small muted">due ' + dateLabel(b.due_date) + (overdue ? " · OVERDUE" : "") + '</span></span>' +
+        '<span style="display:flex;align-items:center;gap:8px"><b>' + fmt(b.amount) + '</b>' +
+        (b.status === "paid"
+          ? '<span class="chip chip-green">Paid ✓</span>'
+          : '<button class="btn btn-green btn-sm payBill" data-id="' + b.id + '" data-name="' + esc(b.name) + '" data-amt="' + b.amount + '">Mark paid</button>') +
+        '</span></div>';
+    }).join("") : '<div class="empty">No bills this month yet — add a monthly bill below</div>') + '</div>' +
+    '<div class="card"><div class="sec-title">Monthly commitments (templates)</div>' +
+    (tpls.length ? tpls.map(t =>
+      '<div class="row"><span>' + esc(t.name) + ' <span class="small muted">· every month, day ' + t.due_day + '</span></span>' +
+      '<span style="display:flex;align-items:center;gap:6px"><b>' + fmt(t.amount) + '</b><button class="del delTpl" data-id="' + t.id + '">🗑</button></span></div>'
+    ).join("") : '<div class="empty">No recurring bills yet</div>') + '</div>';
+
+  $("addBillBtn").onclick = () => {
+    openModal('<h3>Add monthly bill <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>Bill name</label><input id="rbName" placeholder="Broadband, EB, rent…">' +
+      '<label>Amount</label><input id="rbAmt" type="number" inputmode="decimal" placeholder="999">' +
+      '<label>Due day of month (1–28)</label><input id="rbDay" type="number" min="1" max="28" placeholder="12">' +
+      '<div class="actions"><button class="btn btn-gold" id="rbSave">Save</button></div>');
+    $("rbSave").onclick = async () => {
+      const name = $("rbName").value.trim(), amt = +$("rbAmt").value, day = Math.min(Math.max(+$("rbDay").value || 1, 1), 28);
+      if (!name || !amt) { toast("Name and amount needed"); return; }
+      const res = await sbInsert("recurring_bills", { name: name, amount: amt, due_day: day });
+      if (res && res[0]) {
+        await sbInsert("bill_instances", { recurring_bill_id: res[0].id, name: name, amount: amt, month: m, due_date: m + "-" + String(day).padStart(2, "0") });
+      }
+      closeModal(); toast("Bill added"); renderBills();
+    };
+  };
+  $("main").querySelectorAll(".payBill").forEach(b => b.onclick = () => {
+    openModal('<h3>Pay: ' + b.dataset.name + ' <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>Paid via</label><select id="pbAcc">' + accountOptions() + '</select>' +
+      '<div class="actions"><button class="btn btn-green" id="pbSave">Confirm paid · ' + fmt(b.dataset.amt) + '</button></div>');
+    $("pbSave").onclick = async () => {
+      await sbUpdate("bill_instances", "id=eq." + b.dataset.id, { status: "paid", paid_at: new Date().toISOString(), account_id: +$("pbAcc").value });
+      await sbInsert("spends", { item: b.dataset.name + " bill", amount: +b.dataset.amt, account_id: +$("pbAcc").value, category: "Bills" });
+      closeModal(); toast(b.dataset.name + " paid ✓"); renderBills();
+    };
+  });
+  $("main").querySelectorAll(".delTpl").forEach(b => b.onclick = async () => {
+    if (!confirm("Stop this recurring bill? Past records stay.")) return;
+    await sbUpdate("recurring_bills", "id=eq." + b.dataset.id, { is_active: false }); renderBills();
+  });
+}
+
+/* =====================================================
+   LOANS
+===================================================== */
+async function renderLoans() {
+  const loans = await sbQuery("loans", "select=*&order=status,outstanding.desc");
+  if (activeTab !== "loans") return;
+
+  $("main").innerHTML =
+    '<div class="page-title"><span>🏦 Loans</span><button class="btn btn-ghost btn-sm" id="addLoanBtn">+ Add loan</button></div>' +
+    '<div class="grid g2">' +
+    (loans.length ? loans.map(l => {
+      const pct = Math.min(100, Math.round(l.months_paid / l.total_months * 100));
+      const done = l.status === "closed" || +l.outstanding <= 0;
+      return '<div class="card"><div class="sec-title">' + esc(l.name) + (done ? ' <span class="chip chip-green">Closed ✓</span>' : ' <span class="chip chip-gold">' + fmt(l.emi_amount) + '/mo</span>') + '</div>' +
+        '<div class="small muted">' + l.months_paid + ' of ' + l.total_months + ' EMIs paid · started ' + (l.start_date ? dateLabel(l.start_date) : "—") + '</div>' +
+        '<div class="bar-wrap" style="margin:10px 0 6px"><div class="bar" style="width:' + pct + '%;background:var(--green)"></div></div>' +
+        '<div class="row" style="border:none;padding:4px 0"><span class="muted small">Outstanding</span><b>' + fmt(l.outstanding) + '</b></div>' +
+        (done ? "" : '<button class="btn btn-gold btn-sm payEmi" style="margin-top:8px" data-id="' + l.id + '" data-name="' + esc(l.name) + '" data-emi="' + l.emi_amount + '" data-out="' + l.outstanding + '" data-mp="' + l.months_paid + '" data-tm="' + l.total_months + '">Pay EMI · ' + fmt(l.emi_amount) + '</button>') +
+        '</div>';
+    }).join("") : '<div class="card"><div class="empty">No loans added yet</div></div>') + '</div>';
+
+  $("addLoanBtn").onclick = () => {
+    openModal('<h3>Add loan <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>Loan name</label><input id="lnName" placeholder="Bike loan, personal loan…">' +
+      '<div class="form-grid"><div><label>Total principal</label><input id="lnPrin" type="number" placeholder="200000"></div>' +
+      '<div><label>EMI per month</label><input id="lnEmi" type="number" placeholder="6500"></div>' +
+      '<div><label>Total months</label><input id="lnTotal" type="number" placeholder="36"></div>' +
+      '<div><label>Months already paid</label><input id="lnPaid" type="number" value="0"></div></div>' +
+      '<label>Start date</label><input id="lnStart" type="date">' +
+      '<div class="actions"><button class="btn btn-gold" id="lnSave">Save loan</button></div>');
+    $("lnSave").onclick = async () => {
+      const prin = +$("lnPrin").value, emi = +$("lnEmi").value, total = +$("lnTotal").value, paid = +$("lnPaid").value || 0;
+      const name = $("lnName").value.trim();
+      if (!name || !prin || !emi || !total) { toast("Fill all loan fields"); return; }
+      const out = Math.max(0, prin - paid * emi);
+      await sbInsert("loans", { name: name, principal: prin, emi_amount: emi, total_months: total, months_paid: paid, outstanding: out, start_date: $("lnStart").value || null, status: out <= 0 ? "closed" : "active" });
+      closeModal(); toast("Loan added"); renderLoans();
+    };
+  };
+  $("main").querySelectorAll(".payEmi").forEach(b => b.onclick = () => {
+    openModal('<h3>Pay EMI: ' + b.dataset.name + ' <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>EMI amount</label><input id="emiAmt" type="number" value="' + b.dataset.emi + '">' +
+      '<label>Paid via</label><select id="emiAcc">' + accountOptions() + '</select>' +
+      '<div class="actions"><button class="btn btn-green" id="emiSave">Confirm payment</button></div>');
+    $("emiSave").onclick = async () => {
+      const amt = +$("emiAmt").value; if (!amt) { toast("Enter amount"); return; }
+      const newOut = Math.max(0, +b.dataset.out - amt);
+      const mp = +b.dataset.mp + 1;
+      await sbInsert("loan_payments", { loan_id: +b.dataset.id, amount: amt, month: curMonth() });
+      await sbUpdate("loans", "id=eq." + b.dataset.id, { months_paid: mp, outstanding: newOut, status: (newOut <= 0 || mp >= +b.dataset.tm) ? "closed" : "active" });
+      await sbInsert("spends", { item: b.dataset.name + " EMI", amount: amt, account_id: +$("emiAcc").value, category: "EMI" });
+      closeModal(); toast("EMI paid · " + fmt(newOut) + " left 📉"); renderLoans();
+    };
+  });
+}
+
+/* =====================================================
+   CARDS
+===================================================== */
+async function renderCards() {
+  const m = curMonth();
+  const cards = ACCOUNTS.filter(a => a.type === "credit_card");
+  const [bills, spends] = await Promise.all([
+    sbQuery("card_bills", "select=*&month=eq." + m),
+    sbQuery("spends", "select=amount,account_id&spent_at=gte." + m + "-01")
+  ]);
+  if (activeTab !== "cards") return;
+  const today = todayStr();
+
+  $("main").innerHTML =
+    '<div class="page-title"><span>💳 Credit cards · ' + monthLabel(m) + '</span></div>' +
+    '<div class="grid g2">' + cards.map(c => {
+      const bill = bills.find(b => b.account_id === c.id);
+      const monthSpend = spends.filter(s => s.account_id === c.id).reduce((a, b) => a + +b.amount, 0);
+      const overdue = bill && bill.status === "pending" && bill.due_date && bill.due_date < today;
+      return '<div class="card"><div class="sec-title">💳 ' + esc(c.name) + (bill && bill.status === "paid" ? ' <span class="chip chip-green">Settled ✓</span>' : "") + '</div>' +
+        '<div class="row" style="border:none;padding:3px 0"><span class="muted small">Spent on this card this month</span><span>' + fmt(monthSpend) + '</span></div>' +
+        '<div class="row" style="border:none;padding:3px 0"><span class="muted small">Bill pending</span><b class="' + (overdue ? "red" : "") + '">' + (bill ? fmt(bill.amount_due) + (bill.due_date ? " · due " + dateLabel(bill.due_date) : "") + (overdue ? " ⚠" : "") : "—") + '</b></div>' +
+        '<div style="display:flex;gap:8px;margin-top:10px">' +
+        '<button class="btn btn-ghost btn-sm setBill" data-acc="' + c.id + '" data-name="' + esc(c.name) + '" data-bill="' + (bill ? bill.id : "") + '" data-amt="' + (bill ? bill.amount_due : "") + '" data-due="' + (bill && bill.due_date ? bill.due_date : "") + '">' + (bill ? "Edit bill" : "Set this month bill") + '</button>' +
+        (bill && bill.status === "pending" ? '<button class="btn btn-green btn-sm payCard" data-bill="' + bill.id + '" data-name="' + esc(c.name) + '" data-amt="' + bill.amount_due + '">Mark settled</button>' : "") +
+        '</div></div>';
+    }).join("") + '</div>';
+
+  $("main").querySelectorAll(".setBill").forEach(b => b.onclick = () => {
+    openModal('<h3>' + b.dataset.name + ' bill <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>Total amount due</label><input id="cbAmt" type="number" value="' + b.dataset.amt + '" placeholder="38200">' +
+      '<label>Due date</label><input id="cbDue" type="date" value="' + b.dataset.due + '">' +
+      '<div class="actions"><button class="btn btn-gold" id="cbSave">Save</button></div>');
+    $("cbSave").onclick = async () => {
+      const amt = +$("cbAmt").value; if (!amt) { toast("Enter amount"); return; }
+      if (b.dataset.bill) await sbUpdate("card_bills", "id=eq." + b.dataset.bill, { amount_due: amt, due_date: $("cbDue").value || null });
+      else await sbInsert("card_bills", { account_id: +b.dataset.acc, month: m, amount_due: amt, due_date: $("cbDue").value || null });
+      closeModal(); toast("Card bill saved"); renderCards();
+    };
+  });
+  $("main").querySelectorAll(".payCard").forEach(b => b.onclick = () => {
+    openModal('<h3>Settle ' + b.dataset.name + ' <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>Paid via</label><select id="pcAcc">' + accountOptions() + '</select>' +
+      '<div class="actions"><button class="btn btn-green" id="pcSave">Confirm settled · ' + fmt(b.dataset.amt) + '</button></div>');
+    $("pcSave").onclick = async () => {
+      await sbUpdate("card_bills", "id=eq." + b.dataset.bill, { status: "paid", paid_at: new Date().toISOString() });
+      await sbInsert("spends", { item: b.dataset.name + " bill payment", amount: +b.dataset.amt, account_id: +$("pcAcc").value, category: "Card bill" });
+      closeModal(); toast(b.dataset.name + " settled ✓"); renderCards();
+    };
+  });
+}
+
+/* =====================================================
+   DUES — money lent + recurring splits + one-time splits
+===================================================== */
+async function renderDues() {
+  const m = curMonth();
+  const [lendings, splits, cols, ots] = await Promise.all([
+    sbQuery("lendings", "select=*&order=status,expected_date"),
+    sbQuery("recurring_splits", "select=*,recurring_split_members(*)&is_active=eq.true"),
+    sbQuery("split_collections", "select=*,recurring_splits(name)&month=eq." + m + "&order=person"),
+    sbQuery("onetime_splits", "select=*,onetime_split_members(*)&order=split_date.desc&limit=15")
+  ]);
+  if (activeTab !== "dues") return;
+  const today = todayStr();
+  const pendLend = lendings.filter(l => l.status === "pending");
+  const doneLend = lendings.filter(l => l.status === "repaid").slice(0, 5);
+
+  $("main").innerHTML =
+    '<div class="page-title"><span>🤝 Dues & splits</span><div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-ghost btn-sm" id="addLendBtn">+ Lend money</button>' +
+      '<button class="btn btn-ghost btn-sm" id="addRsBtn">+ Recurring split</button>' +
+      '<button class="btn btn-ghost btn-sm" id="addOtBtn">+ One-time split</button></div></div>' +
+
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">💰 Money I lent</div>' +
+    (pendLend.length ? pendLend.map(l => {
+      const late = l.expected_date && l.expected_date < today;
+      return '<div class="row"><span class="red">' + esc(l.person) + '<br><span class="small muted">given ' + dateLabel(l.given_date) + (l.expected_date ? " · expect " + dateLabel(l.expected_date) : "") + (late ? ' · <span class="red">LATE</span>' : "") + (l.note ? " · " + esc(l.note) : "") + '</span></span>' +
+        '<span style="display:flex;align-items:center;gap:8px"><b class="red">' + fmt(l.amount) + '</b><button class="btn btn-green btn-sm markRepaid" data-id="' + l.id + '">Got it back</button></span></div>';
+    }).join("") : '<div class="empty">Nothing lent out currently</div>') +
+    (doneLend.length ? '<div class="small muted" style="margin-top:10px">Recently repaid: ' + doneLend.map(l => esc(l.person) + " " + fmt(l.amount)).join(" · ") + '</div>' : "") + '</div>' +
+
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">🔁 Recurring splits · ' + monthLabel(m) + '</div>' +
+    (cols.length ? cols.map(c =>
+      '<div class="row"><span class="' + (c.status === "pending" ? "red" : "muted") + '"' + (c.status === "received" ? ' style="text-decoration:line-through"' : "") + '>' + esc(c.person) + ' <span class="small muted">· ' + esc(c.recurring_splits ? c.recurring_splits.name : "") + '</span></span>' +
+      '<span style="display:flex;align-items:center;gap:8px"><b class="' + (c.status === "pending" ? "red" : "green") + '">' + fmt(c.amount) + '</b>' +
+      (c.status === "pending" ? '<button class="btn btn-green btn-sm markCol" data-id="' + c.id + '">✓</button>' : '<span class="chip chip-green">✓</span>') + '</span></div>'
+    ).join("") : '<div class="empty">No recurring splits set up — add Netflix etc.</div>') +
+    (splits.length ? '<div class="small muted" style="margin-top:10px">' + splits.map(s => esc(s.name) + " " + fmt(s.total_amount) + " ÷ " + ((s.recurring_split_members || []).length + 1) + ' <button class="del delRs" data-id="' + s.id + '">🗑</button>').join(" · ") + '</div>' : "") + '</div>' +
+
+    '<div class="card"><div class="sec-title">🍛 One-time splits</div>' +
+    (ots.length ? ots.map(o => {
+      const mems = o.onetime_split_members || [];
+      const pend = mems.filter(x => x.status === "pending");
+      return '<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div class="row" style="border:none;padding:0 0 6px"><span><b>' + esc(o.title) + '</b> <span class="small muted">· ' + dateLabel(o.split_date) + " · total " + fmt(o.total_amount) + '</span></span>' +
+        (pend.length ? '<span class="chip chip-red">' + pend.length + ' pending</span>' : '<span class="chip chip-green">All settled ✓</span>') + '</div>' +
+        '<div style="display:flex;gap:7px;flex-wrap:wrap">' + mems.map(x =>
+          x.status === "pending"
+            ? '<button class="chip chip-red markOt" data-id="' + x.id + '" style="border:1px solid var(--red);cursor:pointer">' + esc(x.person) + " " + fmt(x.amount) + ' · tap when paid</button>'
+            : '<span class="chip chip-green" style="text-decoration:line-through">' + esc(x.person) + " " + fmt(x.amount) + '</span>'
+        ).join("") + '</div></div>';
+    }).join("") : '<div class="empty">No one-time splits yet — biryani Sunday awaits 🍛</div>') + '</div>';
+
+  $("addLendBtn").onclick = () => {
+    openModal('<h3>Lend money <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>Person</label><input id="ldPerson" placeholder="Name">' +
+      '<label>Amount</label><input id="ldAmt" type="number" placeholder="2000">' +
+      '<div class="form-grid"><div><label>Given on</label><input id="ldGiven" type="date" value="' + todayStr() + '"></div>' +
+      '<div><label>Expected back by</label><input id="ldExp" type="date"></div></div>' +
+      '<label>Note (optional)</label><input id="ldNote" placeholder="Reason…">' +
+      '<div class="actions"><button class="btn btn-gold" id="ldSave">Save</button></div>');
+    $("ldSave").onclick = async () => {
+      const p = $("ldPerson").value.trim(), amt = +$("ldAmt").value;
+      if (!p || !amt) { toast("Person and amount needed"); return; }
+      await sbInsert("lendings", { person: p, amount: amt, given_date: $("ldGiven").value, expected_date: $("ldExp").value || null, note: $("ldNote").value || null });
+      closeModal(); toast("Noted — " + p + " owes you " + fmt(amt)); renderDues();
+    };
+  };
+  $("addRsBtn").onclick = () => {
+    openModal('<h3>Recurring split <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>What is shared?</label><input id="rsName" placeholder="Netflix, Spotify…">' +
+      '<label>Total monthly amount</label><input id="rsTotal" type="number" placeholder="699">' +
+      '<label>People who pay you (comma separated, NOT including you)</label><input id="rsPeople" placeholder="Kiran, Vignesh, Issac">' +
+      '<label>Collect by day of month</label><input id="rsDay" type="number" min="1" max="28" value="5">' +
+      '<p class="small muted" style="margin-top:8px">Each person\u2019s share = total ÷ (people + you). It auto-appears every month as pending until you tick it.</p>' +
+      '<div class="actions"><button class="btn btn-gold" id="rsSave">Create</button></div>');
+    $("rsSave").onclick = async () => {
+      const name = $("rsName").value.trim(), total = +$("rsTotal").value;
+      const people = $("rsPeople").value.split(",").map(x => x.trim()).filter(Boolean);
+      if (!name || !total || !people.length) { toast("Fill all fields"); return; }
+      const share = Math.round(total / (people.length + 1));
+      const res = await sbInsert("recurring_splits", { name: name, total_amount: total, due_day: Math.min(+$("rsDay").value || 5, 28) });
+      if (res && res[0]) {
+        for (const p of people) {
+          const mr = await sbInsert("recurring_split_members", { split_id: res[0].id, person: p, share_amount: share });
+          if (mr && mr[0]) await sbInsert("split_collections", { split_id: res[0].id, member_id: mr[0].id, person: p, month: m, amount: share });
+        }
+      }
+      closeModal(); toast(name + " split created · " + fmt(share) + "/person"); renderDues();
+    };
+  };
+  $("addOtBtn").onclick = () => {
+    openModal('<h3>One-time split <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>What was it?</label><input id="otTitle" placeholder="Sunday biryani">' +
+      '<label>Total amount you paid</label><input id="otTotal" type="number" placeholder="1000">' +
+      '<label>People who owe you (comma separated, NOT including you)</label><input id="otPeople" placeholder="Kiran, Dharnesh, Leela, Jithu">' +
+      '<p class="small muted" style="margin-top:8px">Split equally among everyone including you — each person\u2019s share shows red until they pay.</p>' +
+      '<div class="actions"><button class="btn btn-gold" id="otSave">Create split</button></div>');
+    $("otSave").onclick = async () => {
+      const title = $("otTitle").value.trim(), total = +$("otTotal").value;
+      const people = $("otPeople").value.split(",").map(x => x.trim()).filter(Boolean);
+      if (!title || !total || !people.length) { toast("Fill all fields"); return; }
+      const share = Math.round(total / (people.length + 1));
+      const res = await sbInsert("onetime_splits", { title: title, total_amount: total });
+      if (res && res[0]) {
+        for (const p of people) await sbInsert("onetime_split_members", { split_id: res[0].id, person: p, amount: share });
+      }
+      closeModal(); toast(title + " · " + fmt(share) + " each from " + people.length + " people"); renderDues();
+    };
+  };
+  $("main").querySelectorAll(".markRepaid").forEach(b => b.onclick = async () => {
+    await sbUpdate("lendings", "id=eq." + b.dataset.id, { status: "repaid", repaid_at: new Date().toISOString() });
+    toast("Marked repaid ✓"); renderDues();
+  });
+  $("main").querySelectorAll(".markCol").forEach(b => b.onclick = async () => {
+    await sbUpdate("split_collections", "id=eq." + b.dataset.id, { status: "received", paid_at: new Date().toISOString() });
+    toast("Received ✓"); renderDues();
+  });
+  $("main").querySelectorAll(".markOt").forEach(b => b.onclick = async () => {
+    await sbUpdate("onetime_split_members", "id=eq." + b.dataset.id, { status: "received", paid_at: new Date().toISOString() });
+    toast("Received ✓"); renderDues();
+  });
+  $("main").querySelectorAll(".delRs").forEach(b => b.onclick = async () => {
+    if (!confirm("Stop this recurring split?")) return;
+    await sbUpdate("recurring_splits", "id=eq." + b.dataset.id, { is_active: false }); renderDues();
+  });
+}
+
+/* =====================================================
+   SNACKS
+===================================================== */
+async function renderSnacks() {
+  const rows = await sbQuery("snack_entries", "select=*&order=entry_date.desc,id.desc&limit=100");
+  if (activeTab !== "snacks") return;
+  const invested = rows.filter(r => r.entry_type === "investment").reduce((a, b) => a + +b.amount, 0);
+  const received = rows.filter(r => (r.entry_type === "sale" && r.status === "done") || r.entry_type === "collection").reduce((a, b) => a + +b.amount, 0);
+  const pending = rows.filter(r => r.entry_type === "sale" && r.status === "pending");
+  const pendAmt = pending.reduce((a, b) => a + +b.amount, 0);
+  const profit = received - invested;
+
+  $("main").innerHTML =
+    '<div class="page-title"><span>🍪 Snacks business</span><button class="btn btn-ghost btn-sm" id="addSnackBtn">+ Add entry</button></div>' +
+    '<div class="grid g4" style="margin-bottom:14px">' +
+      '<div class="card stat"><div class="lbl">Invested</div><div class="val">' + fmt(invested) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">Received back</div><div class="val">' + fmt(received) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">Yet to come</div><div class="val ' + (pendAmt ? "red" : "") + '">' + fmt(pendAmt) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">Profit / loss</div><div class="val ' + (profit >= 0 ? "green" : "red") + '">' + (profit >= 0 ? "+" : "") + fmt(profit) + '</div></div></div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">🔴 Pending collections</div>' +
+    (pending.length ? pending.map(p =>
+      '<div class="row"><span class="red">' + esc(p.person || "Someone") + ' <span class="small muted">· ' + dateLabel(p.entry_date) + (p.note ? " · " + esc(p.note) : "") + '</span></span>' +
+      '<span style="display:flex;align-items:center;gap:8px"><b class="red">' + fmt(p.amount) + '</b><button class="btn btn-green btn-sm collectSnack" data-id="' + p.id + '">Collected</button></span></div>'
+    ).join("") : '<div class="empty">No pending snack money 🎉</div>') + '</div>' +
+    '<div class="card"><div class="sec-title">Ledger</div>' +
+    (rows.length ? rows.slice(0, 40).map(r => {
+      const icon = r.entry_type === "investment" ? "📦" : r.entry_type === "sale" ? "🛒" : "💵";
+      return '<div class="row"><span>' + icon + " " + esc(r.entry_type) + (r.person ? " · " + esc(r.person) : "") + '<br><span class="small muted">' + dateLabel(r.entry_date) + (r.note ? " · " + esc(r.note) : "") + '</span></span><b>' + fmt(r.amount) + '</b></div>';
+    }).join("") : '<div class="empty">No entries yet</div>') + '</div>';
+
+  $("addSnackBtn").onclick = () => {
+    openModal('<h3>Snack entry <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<div class="seg"><button class="on" data-t="investment">📦 Invested</button><button data-t="sale">🛒 Sold (credit)</button><button data-t="collection">💵 Collected</button></div>' +
+      '<label>Amount</label><input id="snAmt" type="number" placeholder="500">' +
+      '<label>Person (for sales/collections)</label><input id="snPerson" placeholder="Optional">' +
+      '<label>Note</label><input id="snNote" placeholder="Bought biscuits stock, etc.">' +
+      '<div class="actions"><button class="btn btn-gold" id="snSave">Save</button></div>');
+    let type = "investment";
+    document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
+      document.querySelectorAll(".seg button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on"); type = b.dataset.t;
+    });
+    $("snSave").onclick = async () => {
+      const amt = +$("snAmt").value; if (!amt) { toast("Enter amount"); return; }
+      await sbInsert("snack_entries", { entry_type: type, amount: amt, person: $("snPerson").value.trim() || null, note: $("snNote").value || null, status: type === "sale" ? "pending" : "done" });
+      closeModal(); toast("Snack entry added"); renderSnacks();
+    };
+  };
+  $("main").querySelectorAll(".collectSnack").forEach(b => b.onclick = async () => {
+    await sbUpdate("snack_entries", "id=eq." + b.dataset.id, { status: "done" });
+    toast("Collected ✓"); renderSnacks();
+  });
+}
+
+/* =====================================================
+   HEALTH
+===================================================== */
+async function renderHealth() {
+  const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const rows = await sbQuery("health_logs", "select=*&log_date=gte." + weekAgo + "&order=logged_at.desc");
+  if (activeTab !== "health") return;
+  const today = todayStr();
+  const sleepRows = rows.filter(r => r.log_type === "sleep");
+  const hrRows = rows.filter(r => r.log_type === "heart_rate");
+  const avgSleep = sleepRows.length ? (sleepRows.reduce((a, b) => a + +b.value_num, 0) / sleepRows.length).toFixed(1) : "—";
+  const avgHr = hrRows.length ? Math.round(hrRows.reduce((a, b) => a + +b.value_num, 0) / hrRows.length) : "—";
+  const todayFood = rows.filter(r => r.log_type === "food" && r.log_date === today);
+
+  $("main").innerHTML =
+    '<div class="page-title"><span>❤️ Health</span><button class="btn btn-ghost btn-sm" id="addHealthBtn">+ Log</button></div>' +
+    '<div class="grid g4" style="margin-bottom:14px">' +
+      '<div class="card stat"><div class="lbl">😴 Avg sleep (7d)</div><div class="val">' + avgSleep + '<span class="small muted"> hrs</span></div></div>' +
+      '<div class="card stat"><div class="lbl">💓 Avg heart rate (7d)</div><div class="val">' + avgHr + '<span class="small muted"> bpm</span></div></div>' +
+      '<div class="card stat"><div class="lbl">🍽 Meals logged today</div><div class="val">' + todayFood.length + '</div></div></div>' +
+    '<div class="card"><div class="sec-title">Last 7 days</div>' +
+    (rows.length ? rows.map(r => {
+      const icon = { food: "🍽", sleep: "😴", heart_rate: "💓", weight: "⚖️" }[r.log_type] || "📝";
+      const val = r.log_type === "food" ? esc(r.value_text) : r.value_num + (r.log_type === "sleep" ? " hrs" : r.log_type === "heart_rate" ? " bpm" : " kg");
+      return '<div class="row"><span>' + icon + " " + val + (r.note ? ' <span class="small muted">· ' + esc(r.note) + '</span>' : "") + '</span><span class="small muted">' + dateLabel(r.log_date) + '</span></div>';
+    }).join("") : '<div class="empty">Nothing logged this week</div>') + '</div>' +
+    '<p class="small muted" style="margin-top:12px">💡 Apple Watch auto-sync via iOS Shortcuts can be added later — for now log manually.</p>';
+
+  $("addHealthBtn").onclick = () => {
+    openModal('<h3>Health log <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<div class="seg"><button class="on" data-t="food">🍽 Food</button><button data-t="sleep">😴 Sleep</button><button data-t="heart_rate">💓 HR</button><button data-t="weight">⚖️</button></div>' +
+      '<div id="hFood"><label>What did you eat?</label><input id="hText" placeholder="Idli + sambar"></div>' +
+      '<div id="hNum" class="hidden"><label id="hNumLbl">Hours slept</label><input id="hVal" type="number" step="0.1" placeholder="7.5"></div>' +
+      '<label>Date</label><input id="hDate" type="date" value="' + todayStr() + '">' +
+      '<div class="actions"><button class="btn btn-gold" id="hSave">Save</button></div>');
+    let type = "food";
+    const lbls = { sleep: "Hours slept", heart_rate: "Heart rate (bpm)", weight: "Weight (kg)" };
+    document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
+      document.querySelectorAll(".seg button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on"); type = b.dataset.t;
+      $("hFood").classList.toggle("hidden", type !== "food");
+      $("hNum").classList.toggle("hidden", type === "food");
+      if (type !== "food") $("hNumLbl").textContent = lbls[type];
+    });
+    $("hSave").onclick = async () => {
+      if (type === "food") {
+        const t = $("hText").value.trim(); if (!t) { toast("Enter food"); return; }
+        await sbInsert("health_logs", { log_type: "food", value_text: t, log_date: $("hDate").value });
+      } else {
+        const v = +$("hVal").value; if (!v) { toast("Enter value"); return; }
+        await sbInsert("health_logs", { log_type: type, value_num: v, log_date: $("hDate").value });
+      }
+      closeModal(); toast("Logged ✓"); renderHealth();
+    };
+  };
+}
+
+/* ---------------- Init ---------------- */
+applyTheme(localStorage.getItem("rv_theme") || "dark");
+(function () {
+  const hp = new URLSearchParams(location.hash.slice(1));
+  if (hp.get("type") === "recovery" && hp.get("access_token")) {
+    recoveryToken = hp.get("access_token");
+    authView("authReset");
+    return;
+  }
+  try {
+    const s = JSON.parse(localStorage.getItem("rv_session"));
+    if (s && s.refresh_token) {
+      SESSION = s;
+      freshToken().then(() => { if (SESSION) startApp(); });
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
