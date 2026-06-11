@@ -448,22 +448,44 @@ async function ensureMonthlyData() {
 ===================================================== */
 async function renderDashboard() {
   const m = curMonth();
-  const [salaries, spends, loans, cardBills, bills, lendings, splitCols, otMembers, snacks] = await Promise.all([
+  const [salaries, spends, loans, loanPays, cardBills, bills, lendings, splitCols, otMembers, snacks, borrowings, incomes, healthToday, allSpends, allIncomes, allSalaries] = await Promise.all([
     sbQuery("salaries", "select=amount&month=eq." + m),
     sbQuery("spends", "select=amount&spent_at=gte." + m + "-01"),
-    sbQuery("loans", "select=*&status=eq.active&order=outstanding.desc"),
+    sbQuery("loans", "select=*&status=eq.active"),
+    sbQuery("loan_payments", "select=loan_id,month"),
     sbQuery("card_bills", "select=*,accounts(name)&month=eq." + m),
     sbQuery("bill_instances", "select=*&month=eq." + m + "&order=due_date"),
     sbQuery("lendings", "select=*&status=eq.pending&order=expected_date"),
     sbQuery("split_collections", "select=*,recurring_splits(name)&month=eq." + m + "&status=eq.pending"),
     sbQuery("onetime_split_members", "select=*,onetime_splits(title)&status=eq.pending"),
-    sbQuery("snack_entries", "select=amount&entry_type=eq.sale&status=eq.pending")
+    sbQuery("snack_entries", "select=amount&entry_type=eq.sale&status=eq.pending"),
+    sbQuery("borrowings", "select=*&status=eq.pending&order=due_date"),
+    sbQuery("incomes", "select=amount&received_at=gte." + m + "-01"),
+    sbQuery("health_logs", "select=log_type,calories,value_num&log_date=eq." + todayStr()),
+    sbQuery("spends", "select=amount,account_id,spent_at"),
+    sbQuery("incomes", "select=amount,account_id,received_at"),
+    sbQuery("salaries", "select=amount,account_id,created_at")
   ]);
   if (activeTab !== "dashboard") return;
 
   const salary = salaries.reduce((a, b) => a + +b.amount, 0);
+  const extraIn = incomes.reduce((a, b) => a + +b.amount, 0);
+  const calIn = healthToday.filter(r => r.log_type === "food").reduce((a, b) => a + +(b.calories || 0), 0);
+  const calBurn = healthToday.filter(r => r.log_type === "burned").reduce((a, b) => a + +(b.value_num || 0), 0);
+  const balances = ACCOUNTS.filter(a => a.type !== "credit_card").map(a => {
+    const setAt = a.balance_set_at || "1970-01-01";
+    const sp = allSpends.filter(s => s.account_id === a.id && s.spent_at > setAt).reduce((x, y) => x + +y.amount, 0);
+    const inc = allIncomes.filter(s => s.account_id === a.id && s.received_at > setAt).reduce((x, y) => x + +y.amount, 0);
+    const sal = allSalaries.filter(s => s.account_id === a.id && s.created_at > setAt).reduce((x, y) => x + +y.amount, 0);
+    return { acc: a, bal: +(a.opening_balance || 0) + sal + inc - sp, isSet: !!a.balance_set_at };
+  });
   const spent = spends.reduce((a, b) => a + +b.amount, 0);
-  const loanDebt = loans.reduce((a, b) => a + +b.outstanding, 0);
+  const loanInfo = loans.map(l => {
+    const paidSet = new Set(loanPays.filter(p => p.loan_id === l.id).map(p => p.month));
+    const pend = loanMonthsPending(l, paidSet);
+    return { name: l.name, balance: pend.length * +l.emi_amount, left: pend.length, end: l.end_month };
+  }).filter(l => l.balance > 0).sort((a, b) => b.balance - a.balance);
+  const loanDebt = loanInfo.reduce((a, b) => a + b.balance, 0);
   const cardDebt = cardBills.filter(c => c.status === "pending").reduce((a, b) => a + +b.amount_due, 0);
   const oweMe = lendings.reduce((a, b) => a + +b.amount, 0)
     + splitCols.reduce((a, b) => a + +b.amount, 0)
@@ -472,11 +494,11 @@ async function renderDashboard() {
 
   const today = todayStr();
   const pendingBills = bills.filter(b => b.status === "pending");
-  const maxDebt = Math.max(...loans.map(l => +l.outstanding), ...cardBills.map(c => +c.amount_due), 1);
+  const maxDebt = Math.max(...loanInfo.map(l => l.balance), ...cardBills.map(c => +c.amount_due), 1);
 
   let debtBars = "";
-  loans.forEach(l => {
-    debtBars += '<div class="bar-row"><div class="top"><span>' + esc(l.name) + ' <span class="muted">· ' + l.months_paid + "/" + l.total_months + ' months</span></span><span class="muted">' + fmt(l.outstanding) + ' left</span></div><div class="bar-wrap"><div class="bar" style="width:' + Math.max(3, l.outstanding / maxDebt * 100) + '%;background:var(--gold)"></div></div></div>';
+  loanInfo.forEach(l => {
+    debtBars += '<div class="bar-row"><div class="top"><span>' + esc(l.name) + ' <span class="muted">· ' + l.left + ' EMIs left · ends ' + monthLabel(l.end) + '</span></span><span class="muted">' + fmt(l.balance) + '</span></div><div class="bar-wrap"><div class="bar" style="width:' + Math.max(3, l.balance / maxDebt * 100) + '%;background:var(--gold)"></div></div></div>';
   });
   cardBills.forEach(c => {
     if (c.status !== "pending") return;
@@ -485,35 +507,91 @@ async function renderDashboard() {
   if (!debtBars) debtBars = '<div class="empty">No active debts. Vault is free! 🎉</div>';
 
   const oweRows = [
-    ...lendings.map(l => ({ who: l.person, what: "lent on " + dateLabel(l.given_date), amt: +l.amount, due: l.expected_date })),
-    ...splitCols.map(s => ({ who: s.person, what: (s.recurring_splits ? s.recurring_splits.name : "split") + " " + monthLabel(s.month), amt: +s.amount })),
-    ...otMembers.map(o => ({ who: o.person, what: o.onetime_splits ? o.onetime_splits.title : "split", amt: +o.amount }))
+    ...lendings.map(l => ({ t: "lend", id: l.id, who: l.person, what: "lent on " + dateLabel(l.given_date), amt: +l.amount })),
+    ...splitCols.map(s => ({ t: "col", id: s.id, who: s.person, what: (s.recurring_splits ? s.recurring_splits.name : "split") + " " + monthLabel(s.month), amt: +s.amount })),
+    ...otMembers.map(o => ({ t: "ot", id: o.id, who: o.person, what: o.onetime_splits ? o.onetime_splits.title : "split", amt: +o.amount }))
   ];
 
   $("main").innerHTML =
     '<div class="grid g4">' +
       '<div class="card stat"><div class="lbl">🔒 Salary · ' + monthLabel(m) + '</div><div class="val blurred" id="salaryVal">' + fmt(salary) + '</div>' +
-        '<button class="btn btn-ghost btn-sm" style="margin-top:10px" id="setSalaryBtn">' + (salary ? "Edit" : "Set salary") + '</button></div>' +
+        '<button class="btn btn-ghost btn-sm" style="margin-top:10px" id="setSalaryBtn">' + (salary ? "Edit" : "Set salary") + '</button>' +
+        (extraIn ? '<div class="small green" style="margin-top:8px">+ ' + fmt(extraIn) + ' money in this month</div>' : "") + '</div>' +
       '<div class="card stat"><div class="lbl">💸 Spent this month</div><div class="val">' + fmt(spent) + '</div>' +
         '<div class="small muted" style="margin-top:10px">' + (salary ? Math.round(spent / salary * 100) + "% of salary" : "set salary to compare") + '</div></div>' +
       '<div class="card stat"><div class="lbl">🏦 Total debt</div><div class="val">' + fmt(loanDebt + cardDebt) + '</div>' +
         '<div class="small muted" style="margin-top:10px">' + fmt(loanDebt) + ' loans · ' + fmt(cardDebt) + ' cards</div></div>' +
       '<div class="card stat"><div class="lbl">🤝 People owe me</div><div class="val ' + (oweMe ? "red" : "green") + '">' + fmt(oweMe) + '</div>' +
         '<div class="small muted" style="margin-top:10px">' + oweRows.length + ' pending + snacks</div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F525} Calories today</div><div class="val">' + Math.round(calIn) + '<span class="small muted"> in</span></div>' +
+        '<div class="small muted" style="margin-top:10px">' + Math.round(calBurn) + ' burned \u00b7 net ' + Math.round(calIn - calBurn) + '</div></div>' +
     '</div>' +
     '<div style="height:14px"></div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\u{1F4BC} My accounts <span class="small muted">live balance</span></div>' +
+    balances.map(b =>
+      '<div class="row"><span>' + esc(b.acc.name) + (b.isSet ? "" : ' <span class="small muted">\u00b7 set balance to start tracking</span>') + '</span>' +
+      '<span style="display:flex;align-items:center;gap:8px"><b class="' + (b.bal < 0 ? "red" : b.isSet ? "green" : "muted") + '">' + (b.isSet ? fmt(b.bal) : "\u2014") + '</b>' +
+      '<button class="btn btn-ghost btn-sm setBal" data-id="' + b.acc.id + '" data-name="' + esc(b.acc.name) + '">\u270E</button></span></div>'
+    ).join("") + '</div>' +
     '<div class="card"><div class="sec-title">📉 Debt breakdown <span class="small muted">gold = loans · red = cards</span></div>' + debtBars + '</div>' +
     '<div style="height:14px"></div>' +
     '<div class="grid g2">' +
       '<div class="card"><div class="sec-title">📅 Bills this month</div>' +
         (pendingBills.length ? pendingBills.map(b =>
-          '<div class="row"><span>' + esc(b.name) + '</span><span class="chip ' + (b.due_date < today ? "chip-red" : "chip-gold") + '">' + fmt(b.amount) + " · " + dateLabel(b.due_date) + (b.due_date < today ? " ⚠" : "") + '</span></div>'
+          '<div class="row"><span>' + esc(b.name) + '<br><span class="small ' + (b.due_date < today ? "red" : "muted") + '">' + fmt(b.amount) + " · " + dateLabel(b.due_date) + (b.due_date < today ? " · OVERDUE ⚠" : "") + '</span></span>' +
+          '<button class="btn btn-green btn-sm payDB" data-id="' + b.id + '" data-name="' + esc(b.name) + '" data-amt="' + b.amount + '">Mark paid</button></div>'
         ).join("") : '<div class="empty">All bills paid ✅</div>') + '</div>' +
       '<div class="card"><div class="sec-title">🔴 Pending from people</div>' +
         (oweRows.length ? oweRows.slice(0, 8).map(r =>
-          '<div class="row"><span class="red">' + esc(r.who) + ' <span class="muted small">· ' + esc(r.what) + '</span></span><span class="chip chip-red">' + fmt(r.amt) + '</span></div>'
-        ).join("") : '<div class="empty">Nobody owes you. Peaceful 😌</div>') + '</div>' +
+          '<div class="row"><span class="red">' + esc(r.who) + ' <span class="muted small">· ' + esc(r.what) + '</span></span>' +
+          '<span style="display:flex;align-items:center;gap:7px"><span class="chip chip-red">' + fmt(r.amt) + '</span><button class="btn btn-green btn-sm markOweD" data-t="' + r.t + '" data-id="' + r.id + '">✓</button></span></div>'
+        ).join("") : '<div class="empty">Nobody owes you. Peaceful 😌</div>') +
+        (borrowings.length ? '<div class="sec-title" style="margin-top:14px">⚠️ I have to give</div>' + borrowings.slice(0, 5).map(b =>
+          '<div class="row"><span>' + esc(b.person) + ' <span class="muted small">· ' + (b.due_date ? "by " + dateLabel(b.due_date) : "no date") + '</span></span>' +
+          '<span style="display:flex;align-items:center;gap:7px"><span class="chip ' + (b.due_date && b.due_date < today ? "chip-red" : "chip-gold") + '">' + fmt(b.amount) + '</span><button class="btn btn-green btn-sm payBorD" data-id="' + b.id + '" data-person="' + esc(b.person) + '" data-amt="' + b.amount + '">✓</button></span></div>'
+        ).join("") : "") + '</div>' +
     '</div>';
+
+  $("main").querySelectorAll(".setBal").forEach(b => b.onclick = () => {
+    openModal('<h3>' + b.dataset.name + ' balance <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+      '<label>How much is in this account right now?</label><input id="balAmt" type="number" inputmode="decimal" placeholder="25000">' +
+      '<p class="small muted" style="margin-top:8px">From this moment, every spend from this account reduces it and every salary / money-in adds to it \u2014 live balance.</p>' +
+      '<div class="actions"><button class="btn btn-gold" id="balSave">Set balance</button></div>');
+    $("balSave").onclick = async () => {
+      const amt = $("balAmt").value === "" ? null : +$("balAmt").value;
+      if (amt === null || isNaN(amt)) { toast("Enter the amount"); return; }
+      await sbUpdate("accounts", "id=eq." + b.dataset.id, { opening_balance: amt, balance_set_at: new Date().toISOString() });
+      ACCOUNTS = await sbQuery("accounts", "select=*&is_active=eq.true&order=sort_order");
+      closeModal(); toast(b.dataset.name + " balance set \u2713"); renderDashboard();
+    };
+  });
+  $("main").querySelectorAll(".payDB").forEach(b => b.onclick = () => {
+    openModal('<h3>Pay: ' + b.dataset.name + ' <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>Paid via</label><select id="dbAcc">' + accountOptions() + '</select>' +
+      '<div class="actions"><button class="btn btn-green" id="dbSave">Confirm paid · ' + fmt(b.dataset.amt) + '</button></div>');
+    $("dbSave").onclick = async () => {
+      await sbUpdate("bill_instances", "id=eq." + b.dataset.id, { status: "paid", paid_at: new Date().toISOString(), account_id: +$("dbAcc").value });
+      await sbInsert("spends", { item: b.dataset.name + " bill", amount: +b.dataset.amt, account_id: +$("dbAcc").value, category: "Bills" });
+      closeModal(); toast(b.dataset.name + " paid ✓"); renderDashboard();
+    };
+  });
+  $("main").querySelectorAll(".markOweD").forEach(b => b.onclick = async () => {
+    const t = b.dataset.t, id = b.dataset.id;
+    if (t === "lend") await sbUpdate("lendings", "id=eq." + id, { status: "repaid", repaid_at: new Date().toISOString() });
+    else if (t === "col") await sbUpdate("split_collections", "id=eq." + id, { status: "received", paid_at: new Date().toISOString() });
+    else await sbUpdate("onetime_split_members", "id=eq." + id, { status: "received", paid_at: new Date().toISOString() });
+    toast("Received ✓"); renderDashboard();
+  });
+  $("main").querySelectorAll(".payBorD").forEach(b => b.onclick = () => {
+    openModal('<h3>Return to ' + b.dataset.person + ' <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>Paid via</label><select id="dboAcc">' + accountOptions() + '</select>' +
+      '<div class="actions"><button class="btn btn-green" id="dboSave">Confirm gave back · ' + fmt(b.dataset.amt) + '</button></div>');
+    $("dboSave").onclick = async () => {
+      await sbUpdate("borrowings", "id=eq." + b.dataset.id, { status: "paid", paid_at: new Date().toISOString() });
+      await sbInsert("spends", { item: "Returned to " + b.dataset.person, amount: +b.dataset.amt, account_id: +$("dboAcc").value, category: "Borrow return" });
+      closeModal(); toast("Returned ✓"); renderDashboard();
+    };
+  });
 
   let peek = null;
   $("salaryVal").onclick = function () {
@@ -527,14 +605,15 @@ async function renderDashboard() {
 function salaryModal(m, current) {
   openModal('<h3>Salary · ' + monthLabel(m) + ' <button class="x" onclick="closeModal()">✕</button></h3>' +
     '<label>Total amount received this month</label><input id="salAmt" type="number" inputmode="decimal" value="' + (current || "") + '" placeholder="e.g. 62000">' +
+    '<label>Received into</label><select id="salAcc">' + accountOptions() + '</select>' +
     '<label>Note (optional)</label><input id="salNote" placeholder="Salary + incentive etc.">' +
     '<div class="actions"><button class="btn btn-gold" id="salSave">Save</button></div>');
   $("salSave").onclick = async () => {
     const amt = +$("salAmt").value;
     if (!amt) { toast("Enter amount"); return; }
     const existing = await sbQuery("salaries", "select=id&month=eq." + m);
-    if (existing.length) await sbUpdate("salaries", "id=eq." + existing[0].id, { amount: amt, note: $("salNote").value });
-    else await sbInsert("salaries", { month: m, amount: amt, note: $("salNote").value });
+    if (existing.length) await sbUpdate("salaries", "id=eq." + existing[0].id, { amount: amt, note: $("salNote").value, account_id: +$("salAcc").value });
+    else await sbInsert("salaries", { month: m, amount: amt, note: $("salNote").value, account_id: +$("salAcc").value });
     closeModal(); toast("Salary saved 🔒"); renderDashboard();
   };
 }
@@ -547,18 +626,34 @@ function accountOptions(sel) {
   return ACCOUNTS.map(a => '<option value="' + a.id + '"' + (sel == a.id ? " selected" : "") + '>' + esc(a.name) + '</option>').join("");
 }
 function quickSpendModal() {
-  openModal('<h3>Quick spend 💸 <button class="x" onclick="closeModal()">✕</button></h3>' +
-    '<label>What did you buy?</label><input id="qsItem" placeholder="Tea, lunch, petrol…">' +
+  openModal('<h3>Quick entry <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+    '<div class="seg" id="qsSeg"><button class="on" data-t="spend">\u{1F4B8} Spend</button><button data-t="in">\u{1F4B0} Money in</button></div>' +
+    '<label id="qsItemLbl">What did you buy?</label><input id="qsItem" placeholder="Tea, lunch, petrol\u2026">' +
     '<label>Amount</label><input id="qsAmt" type="number" inputmode="decimal" placeholder="30">' +
-    '<label>Paid via</label><select id="qsAcc">' + accountOptions() + '</select>' +
-    '<label>Category (optional)</label><input id="qsCat" placeholder="Food, travel, shopping…">' +
-    '<div class="actions"><button class="btn btn-gold" id="qsSave">Add spend</button></div>');
+    '<label id="qsAccLbl">Paid via</label><select id="qsAcc">' + accountOptions() + '</select>' +
+    '<div id="qsCatWrap"><label>Category (optional)</label><input id="qsCat" placeholder="Food, travel, shopping\u2026"></div>' +
+    '<div class="actions"><button class="btn btn-gold" id="qsSave">Add</button></div>');
+  let mode = "spend";
+  document.querySelectorAll("#qsSeg button").forEach(b => b.onclick = () => {
+    document.querySelectorAll("#qsSeg button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on"); mode = b.dataset.t;
+    $("qsItemLbl").textContent = mode === "spend" ? "What did you buy?" : "From whom / source?";
+    $("qsItem").placeholder = mode === "spend" ? "Tea, lunch, petrol\u2026" : "Mom, refund, gift\u2026";
+    $("qsAccLbl").textContent = mode === "spend" ? "Paid via" : "Received into";
+    $("qsCatWrap").classList.toggle("hidden", mode === "in");
+  });
   $("qsItem").focus();
   $("qsSave").onclick = async () => {
     const item = $("qsItem").value.trim(), amt = +$("qsAmt").value;
-    if (!item || !amt) { toast("Item and amount needed"); return; }
-    await sbInsert("spends", { item: item, amount: amt, account_id: +$("qsAcc").value, category: $("qsCat").value.trim() || null });
-    closeModal(); toast(item + " · " + fmt(amt) + " added");
+    if (!item || !amt) { toast("Fill both fields"); return; }
+    if (mode === "spend") {
+      await sbInsert("spends", { item: item, amount: amt, account_id: +$("qsAcc").value, category: $("qsCat").value.trim() || null });
+      toast(item + " \u00b7 " + fmt(amt) + " spent");
+    } else {
+      await sbInsert("incomes", { source: item, amount: amt, account_id: +$("qsAcc").value });
+      toast(fmt(amt) + " in from " + item + " \u{1F4B0}");
+    }
+    closeModal();
     if (activeTab === "spends") renderSpends();
     if (activeTab === "dashboard") renderDashboard();
   };
@@ -567,8 +662,12 @@ function quickSpendModal() {
 async function renderSpends() {
   const m = spendsMonth;
   const next = shiftMonth(m, 1);
-  const rows = await sbQuery("spends", "select=*,accounts(name)&spent_at=gte." + m + "-01&spent_at=lt." + next + "-01&order=spent_at.desc");
+  const [rows, ins] = await Promise.all([
+    sbQuery("spends", "select=*,accounts(name)&spent_at=gte." + m + "-01&spent_at=lt." + next + "-01&order=spent_at.desc"),
+    sbQuery("incomes", "select=*,accounts(name)&received_at=gte." + m + "-01&received_at=lt." + next + "-01&order=received_at.desc")
+  ]);
   if (activeTab !== "spends") return;
+  const inTotal = ins.reduce((a, b) => a + +b.amount, 0);
   const total = rows.reduce((a, b) => a + +b.amount, 0);
   const byAcc = {};
   rows.forEach(r => { const n = r.accounts ? r.accounts.name : "—"; byAcc[n] = (byAcc[n] || 0) + +r.amount; });
@@ -577,6 +676,8 @@ async function renderSpends() {
     '<div class="page-title"><span>💸 Spends</span><div class="month-nav"><button id="spPrev">‹</button><span>' + monthLabel(m) + '</span><button id="spNext">›</button></div></div>' +
     '<div class="card" style="margin-bottom:14px"><div class="sec-title">Total: <span class="gold">' + fmt(total) + '</span></div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' + Object.entries(byAcc).map(([k, v]) => '<span class="chip chip-teal">' + esc(k) + " · " + fmt(v) + '</span>').join("") + '</div></div>' +
+    (ins.length ? '<div class="card" style="margin-bottom:14px"><div class="sec-title">\u{1F4B0} Money in \u00b7 <span class="green">' + fmt(inTotal) + '</span></div>' +
+      ins.map(i => '<div class="row"><span>' + esc(i.source) + '<br><span class="small muted">' + dtLabel(i.received_at) + " \u00b7 " + esc(i.accounts ? i.accounts.name : "") + '</span></span><b class="green">+' + fmt(i.amount) + '</b></div>').join("") + '</div>' : "") +
     '<div class="card">' +
     (rows.length ? rows.map(r =>
       '<div class="row"><span>' + esc(r.item) + '<br><span class="small muted">' + dtLabel(r.spent_at) + " · " + esc(r.accounts ? r.accounts.name : "") + (r.category ? " · " + esc(r.category) : "") + '</span></span>' +
@@ -657,56 +758,82 @@ async function renderBills() {
    LOANS
 ===================================================== */
 async function renderLoans() {
-  const loans = await sbQuery("loans", "select=*&order=status,outstanding.desc");
+  const [loans, pays] = await Promise.all([
+    sbQuery("loans", "select=*&order=status,created_at"),
+    sbQuery("loan_payments", "select=*&order=month.desc")
+  ]);
   if (activeTab !== "loans") return;
+  const m = curMonth();
 
   $("main").innerHTML =
-    '<div class="page-title"><span>🏦 Loans</span><button class="btn btn-ghost btn-sm" id="addLoanBtn">+ Add loan</button></div>' +
+    '<div class="page-title"><span>\u{1F3E6} Loans</span><button class="btn btn-ghost btn-sm" id="addLoanBtn">+ Add loan</button></div>' +
     '<div class="grid g2">' +
     (loans.length ? loans.map(l => {
-      const pct = Math.min(100, Math.round(l.months_paid / l.total_months * 100));
-      const done = l.status === "closed" || +l.outstanding <= 0;
-      return '<div class="card"><div class="sec-title">' + esc(l.name) + (done ? ' <span class="chip chip-green">Closed ✓</span>' : ' <span class="chip chip-gold">' + fmt(l.emi_amount) + '/mo</span>') + '</div>' +
-        '<div class="small muted">' + l.months_paid + ' of ' + l.total_months + ' EMIs paid · started ' + (l.start_date ? dateLabel(l.start_date) : "—") + '</div>' +
-        '<div class="bar-wrap" style="margin:10px 0 6px"><div class="bar" style="width:' + pct + '%;background:var(--green)"></div></div>' +
-        '<div class="row" style="border:none;padding:4px 0"><span class="muted small">Outstanding</span><b>' + fmt(l.outstanding) + '</b></div>' +
-        (done ? "" : '<button class="btn btn-gold btn-sm payEmi" style="margin-top:8px" data-id="' + l.id + '" data-name="' + esc(l.name) + '" data-emi="' + l.emi_amount + '" data-out="' + l.outstanding + '" data-mp="' + l.months_paid + '" data-tm="' + l.total_months + '">Pay EMI · ' + fmt(l.emi_amount) + '</button>') +
-        '</div>';
+      const myPays = pays.filter(p => p.loan_id === l.id);
+      const paidSet = new Set(myPays.map(p => p.month));
+      const pend = loanMonthsPending(l, paidSet);
+      const balance = pend.length * +l.emi_amount;
+      const done = l.status === "closed" || pend.length === 0;
+      const thisPaid = paidSet.has(m);
+      const dueDate = m + "-" + String(Math.min(l.due_day || 1, 28)).padStart(2, "0");
+      const overdue = !thisPaid && !done && m <= l.end_month && dueDate < todayStr();
+      const recent = myPays.slice(0, 3).map(p => monthLabel(p.month)).join(", ");
+      return '<div class="card"><div class="sec-title">' + esc(l.name) +
+        (done ? ' <span class="chip chip-green">Completed \u2713</span>' : ' <span class="chip chip-gold">' + fmt(l.emi_amount) + ' \u00b7 ' + (l.due_day || 1) + 'th of month</span>') + '</div>' +
+        '<div class="row" style="border:none;padding:3px 0"><span class="muted small">Balance to pay</span><b>' + fmtD(balance) + '</b></div>' +
+        '<div class="row" style="border:none;padding:3px 0"><span class="muted small">EMIs left</span><span>' + pend.length + ' months \u00b7 ends ' + monthLabel(l.end_month) + '</span></div>' +
+        '<div class="row" style="border:none;padding:3px 0"><span class="muted small">' + monthLabel(m) + ' EMI</span>' +
+          (thisPaid ? '<span class="chip chip-green">Paid \u2713</span>' : done ? '<span class="muted small">\u2014</span>' : '<span class="chip ' + (overdue ? "chip-red" : "chip-gold") + '">' + (overdue ? "OVERDUE \u00b7 was due " : "due ") + dateLabel(dueDate) + '</span>') + '</div>' +
+        (recent ? '<div class="small muted" style="margin-top:6px">Recently paid: ' + recent + '</div>' : "") +
+        '<div style="display:flex;gap:8px;margin-top:10px">' +
+        (done ? "" : '<button class="btn btn-gold btn-sm payEmi" data-id="' + l.id + '" data-name="' + esc(l.name) + '" data-emi="' + l.emi_amount + '" data-month="' + (pend[0] || m) + '">Pay ' + monthLabel(pend[0] || m) + ' EMI</button>') +
+        '<button class="del delLoan" data-id="' + l.id + '" title="Delete loan">\u{1F5D1}</button>' +
+        '</div></div>';
     }).join("") : '<div class="card"><div class="empty">No loans added yet</div></div>') + '</div>';
 
   $("addLoanBtn").onclick = () => {
-    openModal('<h3>Add loan <button class="x" onclick="closeModal()">✕</button></h3>' +
-      '<label>Loan name</label><input id="lnName" placeholder="Bike loan, personal loan…">' +
-      '<div class="form-grid"><div><label>Total principal</label><input id="lnPrin" type="number" placeholder="200000"></div>' +
-      '<div><label>EMI per month</label><input id="lnEmi" type="number" placeholder="6500"></div>' +
-      '<div><label>Total months</label><input id="lnTotal" type="number" placeholder="36"></div>' +
-      '<div><label>Months already paid</label><input id="lnPaid" type="number" value="0"></div></div>' +
-      '<label>Start date</label><input id="lnStart" type="date">' +
+    openModal('<h3>Add loan <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+      '<label>Loan name</label><input id="lnName" placeholder="Nissan Magnite car loan">' +
+      '<div class="form-grid"><div><label>EMI every month</label><input id="lnEmi" type="number" step="0.01" placeholder="10330.70"></div>' +
+      '<div><label>I pay on day</label><input id="lnDay" type="number" min="1" max="28" placeholder="10"></div></div>' +
+      '<label>Last EMI month (loan ends)</label><input id="lnEnd" type="month">' +
+      '<p class="small muted" style="margin-top:8px">Balance is calculated automatically: EMIs remaining from this month till the end month \u00d7 EMI amount. Every month you mark it paid and balance drops.</p>' +
       '<div class="actions"><button class="btn btn-gold" id="lnSave">Save loan</button></div>');
     $("lnSave").onclick = async () => {
-      const prin = +$("lnPrin").value, emi = +$("lnEmi").value, total = +$("lnTotal").value, paid = +$("lnPaid").value || 0;
-      const name = $("lnName").value.trim();
-      if (!name || !prin || !emi || !total) { toast("Fill all loan fields"); return; }
-      const out = Math.max(0, prin - paid * emi);
-      await sbInsert("loans", { name: name, principal: prin, emi_amount: emi, total_months: total, months_paid: paid, outstanding: out, start_date: $("lnStart").value || null, status: out <= 0 ? "closed" : "active" });
+      const name = $("lnName").value.trim(), emi = +$("lnEmi").value, endM = $("lnEnd").value, day = Math.min(Math.max(+$("lnDay").value || 1, 1), 28);
+      if (!name || !emi || !endM) { toast("Fill name, EMI and end month"); return; }
+      if (endM < curMonth()) { toast("End month is already past"); return; }
+      await sbInsert("loans", { name: name, emi_amount: emi, end_month: endM, due_day: day });
       closeModal(); toast("Loan added"); renderLoans();
     };
   };
   $("main").querySelectorAll(".payEmi").forEach(b => b.onclick = () => {
-    openModal('<h3>Pay EMI: ' + b.dataset.name + ' <button class="x" onclick="closeModal()">✕</button></h3>' +
-      '<label>EMI amount</label><input id="emiAmt" type="number" value="' + b.dataset.emi + '">' +
+    openModal('<h3>' + b.dataset.name + ' \u00b7 ' + monthLabel(b.dataset.month) + ' <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+      '<label>EMI amount</label><input id="emiAmt" type="number" step="0.01" value="' + b.dataset.emi + '">' +
       '<label>Paid via</label><select id="emiAcc">' + accountOptions() + '</select>' +
       '<div class="actions"><button class="btn btn-green" id="emiSave">Confirm payment</button></div>');
     $("emiSave").onclick = async () => {
       const amt = +$("emiAmt").value; if (!amt) { toast("Enter amount"); return; }
-      const newOut = Math.max(0, +b.dataset.out - amt);
-      const mp = +b.dataset.mp + 1;
-      await sbInsert("loan_payments", { loan_id: +b.dataset.id, amount: amt, month: curMonth() });
-      await sbUpdate("loans", "id=eq." + b.dataset.id, { months_paid: mp, outstanding: newOut, status: (newOut <= 0 || mp >= +b.dataset.tm) ? "closed" : "active" });
+      await sbInsert("loan_payments", { loan_id: +b.dataset.id, amount: amt, month: b.dataset.month });
       await sbInsert("spends", { item: b.dataset.name + " EMI", amount: amt, account_id: +$("emiAcc").value, category: "EMI" });
-      closeModal(); toast("EMI paid · " + fmt(newOut) + " left 📉"); renderLoans();
+      closeModal(); toast(monthLabel(b.dataset.month) + " EMI paid \u2713"); renderLoans();
     };
   });
+  $("main").querySelectorAll(".delLoan").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this loan and its payment history?")) return;
+    await sbDelete("loan_payments", "loan_id=eq." + b.dataset.id);
+    await sbDelete("loans", "id=eq." + b.dataset.id);
+    renderLoans();
+  });
+}
+
+function loanMonthsPending(loan, paidSet) {
+  const out = []; let mm = curMonth(); let guard = 0;
+  while (mm <= loan.end_month && guard < 600) {
+    if (!paidSet.has(mm)) out.push(mm);
+    mm = shiftMonth(mm, 1); guard++;
+  }
+  return out;
 }
 
 /* =====================================================
@@ -766,8 +893,9 @@ async function renderCards() {
 ===================================================== */
 async function renderDues() {
   const m = curMonth();
-  const [lendings, splits, cols, ots] = await Promise.all([
+  const [lendings, borrowings, splits, cols, ots] = await Promise.all([
     sbQuery("lendings", "select=*&order=status,expected_date"),
+    sbQuery("borrowings", "select=*&order=status,due_date"),
     sbQuery("recurring_splits", "select=*,recurring_split_members(*)&is_active=eq.true"),
     sbQuery("split_collections", "select=*,recurring_splits(name)&month=eq." + m + "&order=person"),
     sbQuery("onetime_splits", "select=*,onetime_split_members(*)&order=split_date.desc&limit=15")
@@ -776,10 +904,13 @@ async function renderDues() {
   const today = todayStr();
   const pendLend = lendings.filter(l => l.status === "pending");
   const doneLend = lendings.filter(l => l.status === "repaid").slice(0, 5);
+  const pendBor = borrowings.filter(b => b.status === "pending");
+  const doneBor = borrowings.filter(b => b.status === "paid").slice(0, 5);
 
   $("main").innerHTML =
     '<div class="page-title"><span>🤝 Dues & splits</span><div style="display:flex;gap:8px;flex-wrap:wrap">' +
       '<button class="btn btn-ghost btn-sm" id="addLendBtn">+ Lend money</button>' +
+      '<button class="btn btn-ghost btn-sm" id="addBorBtn">+ I borrowed</button>' +
       '<button class="btn btn-ghost btn-sm" id="addRsBtn">+ Recurring split</button>' +
       '<button class="btn btn-ghost btn-sm" id="addOtBtn">+ One-time split</button></div></div>' +
 
@@ -790,6 +921,15 @@ async function renderDues() {
         '<span style="display:flex;align-items:center;gap:8px"><b class="red">' + fmt(l.amount) + '</b><button class="btn btn-green btn-sm markRepaid" data-id="' + l.id + '">Got it back</button></span></div>';
     }).join("") : '<div class="empty">Nothing lent out currently</div>') +
     (doneLend.length ? '<div class="small muted" style="margin-top:10px">Recently repaid: ' + doneLend.map(l => esc(l.person) + " " + fmt(l.amount)).join(" · ") + '</div>' : "") + '</div>' +
+
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">⚠️ Money I have to give</div>' +
+    (pendBor.length ? pendBor.map(b => {
+      const late = b.due_date && b.due_date < today;
+      const soon = b.due_date && !late && (new Date(b.due_date) - new Date(today)) / 864e5 <= 3;
+      return '<div class="row"><span class="' + (late ? "red" : "") + '">' + esc(b.person) + '<br><span class="small ' + (late || soon ? "red" : "muted") + '">taken ' + dateLabel(b.taken_date) + (b.due_date ? " · give by " + dateLabel(b.due_date) : "") + (late ? " · OVERDUE" : soon ? " · DUE SOON" : "") + (b.note ? " · " + esc(b.note) : "") + '</span></span>' +
+        '<span style="display:flex;align-items:center;gap:8px"><b class="' + (late ? "red" : "") + '">' + fmt(b.amount) + '</b><button class="btn btn-green btn-sm markBorPaid" data-id="' + b.id + '" data-person="' + esc(b.person) + '" data-amt="' + b.amount + '">Gave it back</button></span></div>';
+    }).join("") : '<div class="empty">You owe nobody. Free bird</div>') +
+    (doneBor.length ? '<div class="small muted" style="margin-top:10px">Recently returned: ' + doneBor.map(b => esc(b.person) + " " + fmt(b.amount)).join(" · ") + '</div>' : "") + '</div>' +
 
     '<div class="card" style="margin-bottom:14px"><div class="sec-title">🔁 Recurring splits · ' + monthLabel(m) + '</div>' +
     (cols.length ? cols.map(c =>
@@ -825,6 +965,21 @@ async function renderDues() {
       if (!p || !amt) { toast("Person and amount needed"); return; }
       await sbInsert("lendings", { person: p, amount: amt, given_date: $("ldGiven").value, expected_date: $("ldExp").value || null, note: $("ldNote").value || null });
       closeModal(); toast("Noted — " + p + " owes you " + fmt(amt)); renderDues();
+    };
+  };
+  $("addBorBtn").onclick = () => {
+    openModal('<h3>I borrowed money <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>From whom?</label><input id="brPerson" placeholder="Name">' +
+      '<label>Amount</label><input id="brAmt" type="number" placeholder="5000">' +
+      '<div class="form-grid"><div><label>Taken on</label><input id="brTaken" type="date" value="' + todayStr() + '"></div>' +
+      '<div><label>Give back by</label><input id="brDue" type="date"></div></div>' +
+      '<label>Note (optional)</label><input id="brNote" placeholder="Reason…">' +
+      '<div class="actions"><button class="btn btn-gold" id="brSave">Save</button></div>');
+    $("brSave").onclick = async () => {
+      const p = $("brPerson").value.trim(), amt = +$("brAmt").value;
+      if (!p || !amt) { toast("Person and amount needed"); return; }
+      await sbInsert("borrowings", { person: p, amount: amt, taken_date: $("brTaken").value, due_date: $("brDue").value || null, note: $("brNote").value || null });
+      closeModal(); toast("Noted — you owe " + p + " " + fmt(amt)); renderDues();
     };
   };
   $("addRsBtn").onclick = () => {
@@ -869,6 +1024,16 @@ async function renderDues() {
       closeModal(); toast(title + " · " + fmt(share) + " each from " + people.length + " people"); renderDues();
     };
   };
+  $("main").querySelectorAll(".markBorPaid").forEach(b => b.onclick = () => {
+    openModal('<h3>Return to ' + b.dataset.person + ' <button class="x" onclick="closeModal()">✕</button></h3>' +
+      '<label>Paid via</label><select id="brAcc">' + accountOptions() + '</select>' +
+      '<div class="actions"><button class="btn btn-green" id="brPaySave">Confirm gave back · ' + fmt(b.dataset.amt) + '</button></div>');
+    $("brPaySave").onclick = async () => {
+      await sbUpdate("borrowings", "id=eq." + b.dataset.id, { status: "paid", paid_at: new Date().toISOString() });
+      await sbInsert("spends", { item: "Returned to " + b.dataset.person, amount: +b.dataset.amt, account_id: +$("brAcc").value, category: "Borrow return" });
+      closeModal(); toast("Returned, debt cleared"); renderDues();
+    };
+  });
   $("main").querySelectorAll(".markRepaid").forEach(b => b.onclick = async () => {
     await sbUpdate("lendings", "id=eq." + b.dataset.id, { status: "repaid", repaid_at: new Date().toISOString() });
     toast("Marked repaid ✓"); renderDues();
@@ -888,112 +1053,219 @@ async function renderDues() {
 }
 
 /* =====================================================
-   SNACKS
+   SNACKS — retail shop ledger
 ===================================================== */
 async function renderSnacks() {
-  const rows = await sbQuery("snack_entries", "select=*&order=entry_date.desc,id.desc&limit=100");
+  const rows = await sbQuery("snack_entries", "select=*&order=entry_date.desc,id.desc&limit=200");
   if (activeTab !== "snacks") return;
-  const invested = rows.filter(r => r.entry_type === "investment").reduce((a, b) => a + +b.amount, 0);
-  const received = rows.filter(r => (r.entry_type === "sale" && r.status === "done") || r.entry_type === "collection").reduce((a, b) => a + +b.amount, 0);
-  const pending = rows.filter(r => r.entry_type === "sale" && r.status === "pending");
-  const pendAmt = pending.reduce((a, b) => a + +b.amount, 0);
+  const invested = rows.filter(r => r.entry_type === "stock_in" || r.entry_type === "investment").reduce((a, b) => a + +b.amount, 0);
+  const received = rows.filter(r => ((r.entry_type === "sale") && r.status === "done") || r.entry_type === "collection").reduce((a, b) => a + +b.amount, 0);
+  const creditPend = rows.filter(r => r.entry_type === "sale" && r.status === "pending");
+  const pendAmt = creditPend.reduce((a, b) => a + +b.amount, 0);
   const profit = received - invested;
 
+  const byPerson = {};
+  creditPend.forEach(r => { const p = r.person || "Unknown"; (byPerson[p] = byPerson[p] || []).push(r); });
+
   $("main").innerHTML =
-    '<div class="page-title"><span>🍪 Snacks business</span><button class="btn btn-ghost btn-sm" id="addSnackBtn">+ Add entry</button></div>' +
+    '<div class="page-title"><span>\u{1F36A} Raptor Snacks Shop</span><button class="btn btn-gold btn-sm" id="addSnackBtn">+ Shop entry</button></div>' +
     '<div class="grid g4" style="margin-bottom:14px">' +
-      '<div class="card stat"><div class="lbl">Invested</div><div class="val">' + fmt(invested) + '</div></div>' +
-      '<div class="card stat"><div class="lbl">Received back</div><div class="val">' + fmt(received) + '</div></div>' +
-      '<div class="card stat"><div class="lbl">Yet to come</div><div class="val ' + (pendAmt ? "red" : "") + '">' + fmt(pendAmt) + '</div></div>' +
-      '<div class="card stat"><div class="lbl">Profit / loss</div><div class="val ' + (profit >= 0 ? "green" : "red") + '">' + (profit >= 0 ? "+" : "") + fmt(profit) + '</div></div></div>' +
-    '<div class="card" style="margin-bottom:14px"><div class="sec-title">🔴 Pending collections</div>' +
-    (pending.length ? pending.map(p =>
-      '<div class="row"><span class="red">' + esc(p.person || "Someone") + ' <span class="small muted">· ' + dateLabel(p.entry_date) + (p.note ? " · " + esc(p.note) : "") + '</span></span>' +
-      '<span style="display:flex;align-items:center;gap:8px"><b class="red">' + fmt(p.amount) + '</b><button class="btn btn-green btn-sm collectSnack" data-id="' + p.id + '">Collected</button></span></div>'
-    ).join("") : '<div class="empty">No pending snack money 🎉</div>') + '</div>' +
-    '<div class="card"><div class="sec-title">Ledger</div>' +
-    (rows.length ? rows.slice(0, 40).map(r => {
-      const icon = r.entry_type === "investment" ? "📦" : r.entry_type === "sale" ? "🛒" : "💵";
-      return '<div class="row"><span>' + icon + " " + esc(r.entry_type) + (r.person ? " · " + esc(r.person) : "") + '<br><span class="small muted">' + dateLabel(r.entry_date) + (r.note ? " · " + esc(r.note) : "") + '</span></span><b>' + fmt(r.amount) + '</b></div>';
-    }).join("") : '<div class="empty">No entries yet</div>') + '</div>';
+      '<div class="card stat"><div class="lbl">\u{1F4E6} Invested in stock</div><div class="val">' + fmt(invested) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F4B5} Cash received</div><div class="val">' + fmt(received) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F4D5} Credit pending</div><div class="val ' + (pendAmt ? "red" : "") + '">' + fmt(pendAmt) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F4C8} Profit / loss</div><div class="val ' + (profit >= 0 ? "green" : "red") + '">' + (profit >= 0 ? "+" : "") + fmt(profit) + '</div></div></div>' +
+
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\u{1F4D5} Credit book \u00b7 who owes the shop</div>' +
+    (Object.keys(byPerson).length ? Object.entries(byPerson).map(([p, entries]) => {
+      const tot = entries.reduce((a, b) => a + +b.amount, 0);
+      return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<div class="row" style="border:none;padding:0 0 4px"><span class="red"><b>' + esc(p) + '</b></span><span class="chip chip-red">owes ' + fmt(tot) + '</span></div>' +
+        '<div style="display:flex;gap:7px;flex-wrap:wrap">' + entries.map(r =>
+          '<button class="chip chip-red collectSnack" data-id="' + r.id + '" style="border:1px solid var(--red);cursor:pointer">' + esc(r.item || "items") + (r.qty ? " \u00d7" + r.qty : "") + " \u00b7 " + fmt(r.amount) + ' \u00b7 tap when paid</button>'
+        ).join("") + '</div></div>';
+    }).join("") : '<div class="empty">No credit pending \u2014 all customers settled \u{1F389}</div>') + '</div>' +
+
+    '<div class="card"><div class="sec-title">\u{1F9FE} Shop ledger \u00b7 stock in & sales out</div>' +
+    (rows.length ? rows.slice(0, 50).map(r => {
+      const isIn = r.entry_type === "stock_in" || r.entry_type === "investment";
+      const isCol = r.entry_type === "collection";
+      const arrow = isIn ? '<span class="chip chip-gold">\u2B07 IN</span>' : isCol ? '<span class="chip chip-green">\u{1F4B5} PAID</span>' : '<span class="chip chip-teal">\u2B06 OUT</span>';
+      const desc = (r.item ? esc(r.item) : (isIn ? "stock purchase" : isCol ? "payment received" : "sale")) + (r.qty ? " \u00d7 " + r.qty : "");
+      const who = r.person ? (isIn ? " \u00b7 from " + esc(r.person) : " \u00b7 " + esc(r.person)) : "";
+      const pay = r.entry_type === "sale" ? (r.status === "pending" ? ' <span class="chip chip-red">credit</span>' : ' <span class="chip chip-green">cash</span>') : "";
+      return '<div class="row"><span>' + arrow + " " + desc + '<span class="small muted">' + who + " \u00b7 " + dateLabel(r.entry_date) + (r.note ? " \u00b7 " + esc(r.note) : "") + '</span>' + pay + '</span>' +
+        '<span style="display:flex;align-items:center;gap:6px"><b class="' + (isIn ? "" : "green") + '">' + (isIn ? "\u2212" : "+") + fmt(r.amount) + '</b><button class="del delSnk" data-id="' + r.id + '">\u{1F5D1}</button></span></div>';
+    }).join("") : '<div class="empty">Shop is empty \u2014 add your first stock purchase</div>') + '</div>';
 
   $("addSnackBtn").onclick = () => {
-    openModal('<h3>Snack entry <button class="x" onclick="closeModal()">✕</button></h3>' +
-      '<div class="seg"><button class="on" data-t="investment">📦 Invested</button><button data-t="sale">🛒 Sold (credit)</button><button data-t="collection">💵 Collected</button></div>' +
-      '<label>Amount</label><input id="snAmt" type="number" placeholder="500">' +
-      '<label>Person (for sales/collections)</label><input id="snPerson" placeholder="Optional">' +
-      '<label>Note</label><input id="snNote" placeholder="Bought biscuits stock, etc.">' +
-      '<div class="actions"><button class="btn btn-gold" id="snSave">Save</button></div>');
-    let type = "investment";
-    document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
-      document.querySelectorAll(".seg button").forEach(x => x.classList.remove("on"));
+    openModal('<h3>Shop entry <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+      '<div class="seg" id="snkSeg"><button class="on" data-t="stock_in">\u{1F4E6} Stock in</button><button data-t="sale">\u{1F6D2} Sale</button><button data-t="collection">\u{1F4B5} Payment recd</button></div>' +
+      '<div id="snItemWrap"><label>Item(s)</label><input id="snItem" placeholder="Lays, biscuits, chocolates\u2026"></div>' +
+      '<div id="snQtyWrap"><label>Quantity (optional)</label><input id="snQty" type="number" placeholder="10"></div>' +
+      '<label id="snAmtLbl">Amount spent on stock</label><input id="snAmt" type="number" placeholder="500">' +
+      '<div id="snPersonWrap" class="hidden"><label id="snPersonLbl">Sold to</label><input id="snPerson" placeholder="Name"></div>' +
+      '<div id="snPayWrap" class="hidden"><label>Payment</label><div class="seg" id="snPaySeg"><button class="on" data-p="cash">\u{1F4B5} Cash now</button><button data-p="credit">\u{1F4D5} Credit (pending)</button></div></div>' +
+      '<label>Note (optional)</label><input id="snNote" placeholder="\u2026">' +
+      '<div class="actions"><button class="btn btn-gold" id="snSave">Save entry</button></div>');
+    let type = "stock_in", pay = "cash";
+    document.querySelectorAll("#snkSeg button").forEach(b => b.onclick = () => {
+      document.querySelectorAll("#snkSeg button").forEach(x => x.classList.remove("on"));
       b.classList.add("on"); type = b.dataset.t;
+      $("snItemWrap").classList.toggle("hidden", type === "collection");
+      $("snQtyWrap").classList.toggle("hidden", type === "collection");
+      $("snPersonWrap").classList.toggle("hidden", type === "stock_in");
+      $("snPayWrap").classList.toggle("hidden", type !== "sale");
+      $("snAmtLbl").textContent = type === "stock_in" ? "Amount spent on stock" : type === "sale" ? "Sale amount" : "Amount received";
+      $("snPersonLbl").textContent = type === "sale" ? "Sold to" : "Received from";
+    });
+    document.querySelectorAll("#snPaySeg button").forEach(b => b.onclick = () => {
+      document.querySelectorAll("#snPaySeg button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on"); pay = b.dataset.p;
     });
     $("snSave").onclick = async () => {
       const amt = +$("snAmt").value; if (!amt) { toast("Enter amount"); return; }
-      await sbInsert("snack_entries", { entry_type: type, amount: amt, person: $("snPerson").value.trim() || null, note: $("snNote").value || null, status: type === "sale" ? "pending" : "done" });
-      closeModal(); toast("Snack entry added"); renderSnacks();
+      if (type === "sale" && !$("snPerson").value.trim() && pay === "credit") { toast("Credit sale needs a name"); return; }
+      await sbInsert("snack_entries", {
+        entry_type: type, amount: amt,
+        item: $("snItem").value.trim() || null,
+        qty: +$("snQty").value || null,
+        person: $("snPerson").value.trim() || null,
+        payment: type === "sale" ? pay : null,
+        status: (type === "sale" && pay === "credit") ? "pending" : "done",
+        note: $("snNote").value || null
+      });
+      closeModal(); toast("Shop entry saved \u{1F9FE}"); renderSnacks();
     };
   };
   $("main").querySelectorAll(".collectSnack").forEach(b => b.onclick = async () => {
     await sbUpdate("snack_entries", "id=eq." + b.dataset.id, { status: "done" });
-    toast("Collected ✓"); renderSnacks();
+    toast("Credit collected \u2713"); renderSnacks();
+  });
+  $("main").querySelectorAll(".delSnk").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this ledger entry?")) return;
+    await sbDelete("snack_entries", "id=eq." + b.dataset.id); renderSnacks();
   });
 }
 
 /* =====================================================
-   HEALTH
+   HEALTH — meals + auto calories + burned
 ===================================================== */
+const CAL_DB = {
+  "idli":58,"dosa":170,"masala dosa":390,"set dosa":180,"vada":130,"medu vada":130,"sambar":65,"chutney":45,
+  "pongal":280,"upma":250,"poori":150,"puri":150,"chapati":105,"roti":105,"paratha":260,"parotta":300,
+  "kothu parotta":500,"idiyappam":130,"appam":120,"puttu":200,"white rice":200,"rice":200,"curd rice":250,
+  "sambar rice":300,"lemon rice":280,"tamarind rice":290,"veg biryani":400,"chicken biryani":500,
+  "mutton biryani":550,"biryani":450,"fried rice":350,"noodles":350,"egg":78,"boiled egg":78,"omelette":150,
+  "half boil":90,"chicken curry":280,"chicken 65":290,"chicken":250,"grill chicken":300,"fish fry":220,
+  "fish curry":180,"fish":180,"mutton":320,"prawn":200,"dal":150,"rasam":60,"curd":60,"buttermilk":35,
+  "milk":120,"tea":40,"coffee":60,"black coffee":5,"green tea":2,"boost":140,"horlicks":130,"juice":110,
+  "banana":105,"apple":95,"orange":62,"mango":150,"grapes":60,"watermelon":46,"papaya":55,"guava":68,
+  "bread":70,"toast":85,"sandwich":250,"burger":350,"pizza":285,"samosa":130,"bonda":120,"bajji":90,
+  "murukku":100,"biscuit":50,"chips":150,"chocolate":230,"ice cream":200,"cake":350,"gulab jamun":150,
+  "payasam":250,"halwa":300,"sundal":130,"pani puri":150,"vada pav":290,"salad":80,"oats":150,
+  "cornflakes":130,"maggi":350,"momos":200,"shawarma":400,"soup":100,"lassi":150,"soda":90,"cool drink":140,
+  "tender coconut":45,"sprouts":100,"peanuts":160,"cashew":160,"protein shake":180,"ragi":120,"kanji":120
+};
+function estimateCalories(text) {
+  const t = text.toLowerCase();
+  let total = 0; const found = [];
+  const keys = Object.keys(CAL_DB).sort((a, b) => b.length - a.length);
+  let scan = t;
+  keys.forEach(k => {
+    let idx = scan.indexOf(k);
+    while (idx !== -1) {
+      let qty = 1;
+      const before = scan.slice(Math.max(0, idx - 4), idx).match(/(\d+)\s*$/);
+      if (before) qty = Math.min(+before[1], 20);
+      total += CAL_DB[k] * qty;
+      found.push(k + (qty > 1 ? " \u00d7" + qty : ""));
+      scan = scan.slice(0, idx) + "#".repeat(k.length) + scan.slice(idx + k.length);
+      idx = scan.indexOf(k);
+    }
+  });
+  return { total: total, found: found };
+}
+
 async function renderHealth() {
   const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
-  const rows = await sbQuery("health_logs", "select=*&log_date=gte." + weekAgo + "&order=logged_at.desc");
+  const rows = await sbQuery("health_logs", "select=*&log_date=gte." + weekAgo + "&order=log_date.desc,logged_at.desc");
   if (activeTab !== "health") return;
   const today = todayStr();
+  const todayRows = rows.filter(r => r.log_date === today);
+  const calIn = todayRows.filter(r => r.log_type === "food").reduce((a, b) => a + +(b.calories || 0), 0);
+  const calBurn = todayRows.filter(r => r.log_type === "burned").reduce((a, b) => a + +(b.value_num || 0), 0);
   const sleepRows = rows.filter(r => r.log_type === "sleep");
+  const avgSleep = sleepRows.length ? (sleepRows.reduce((a, b) => a + +b.value_num, 0) / sleepRows.length).toFixed(1) : "\u2014";
   const hrRows = rows.filter(r => r.log_type === "heart_rate");
-  const avgSleep = sleepRows.length ? (sleepRows.reduce((a, b) => a + +b.value_num, 0) / sleepRows.length).toFixed(1) : "—";
-  const avgHr = hrRows.length ? Math.round(hrRows.reduce((a, b) => a + +b.value_num, 0) / hrRows.length) : "—";
-  const todayFood = rows.filter(r => r.log_type === "food" && r.log_date === today);
+  const avgHr = hrRows.length ? Math.round(hrRows.reduce((a, b) => a + +b.value_num, 0) / hrRows.length) : "\u2014";
+  const MEALS = ["breakfast", "lunch", "dinner", "snacks"];
+  const mealIcons = { breakfast: "\u{1F305}", lunch: "\u2600\uFE0F", dinner: "\u{1F319}", snacks: "\u{1F36A}" };
 
   $("main").innerHTML =
-    '<div class="page-title"><span>❤️ Health</span><button class="btn btn-ghost btn-sm" id="addHealthBtn">+ Log</button></div>' +
+    '<div class="page-title"><span>\u2764\uFE0F Health</span><div style="display:flex;gap:8px"><button class="btn btn-gold btn-sm" id="addMealBtn">+ Meal</button><button class="btn btn-ghost btn-sm" id="addVitalBtn">+ Sleep / HR / Burned</button></div></div>' +
     '<div class="grid g4" style="margin-bottom:14px">' +
-      '<div class="card stat"><div class="lbl">😴 Avg sleep (7d)</div><div class="val">' + avgSleep + '<span class="small muted"> hrs</span></div></div>' +
-      '<div class="card stat"><div class="lbl">💓 Avg heart rate (7d)</div><div class="val">' + avgHr + '<span class="small muted"> bpm</span></div></div>' +
-      '<div class="card stat"><div class="lbl">🍽 Meals logged today</div><div class="val">' + todayFood.length + '</div></div></div>' +
-    '<div class="card"><div class="sec-title">Last 7 days</div>' +
-    (rows.length ? rows.map(r => {
-      const icon = { food: "🍽", sleep: "😴", heart_rate: "💓", weight: "⚖️" }[r.log_type] || "📝";
-      const val = r.log_type === "food" ? esc(r.value_text) : r.value_num + (r.log_type === "sleep" ? " hrs" : r.log_type === "heart_rate" ? " bpm" : " kg");
-      return '<div class="row"><span>' + icon + " " + val + (r.note ? ' <span class="small muted">· ' + esc(r.note) + '</span>' : "") + '</span><span class="small muted">' + dateLabel(r.log_date) + '</span></div>';
-    }).join("") : '<div class="empty">Nothing logged this week</div>') + '</div>' +
-    '<p class="small muted" style="margin-top:12px">💡 Apple Watch auto-sync via iOS Shortcuts can be added later — for now log manually.</p>';
+      '<div class="card stat"><div class="lbl">\u{1F525} Calories in today</div><div class="val">' + Math.round(calIn) + '<span class="small muted"> kcal</span></div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F3C3} Burned today</div><div class="val">' + Math.round(calBurn) + '<span class="small muted"> kcal</span></div></div>' +
+      '<div class="card stat"><div class="lbl">\u2696\uFE0F Net today</div><div class="val ' + (calIn - calBurn > 2200 ? "red" : "green") + '">' + Math.round(calIn - calBurn) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F634} Avg sleep \u00b7 \u{1F493} HR (7d)</div><div class="val" style="font-size:19px">' + avgSleep + ' hrs \u00b7 ' + avgHr + ' bpm</div></div></div>' +
 
-  $("addHealthBtn").onclick = () => {
-    openModal('<h3>Health log <button class="x" onclick="closeModal()">✕</button></h3>' +
-      '<div class="seg"><button class="on" data-t="food">🍽 Food</button><button data-t="sleep">😴 Sleep</button><button data-t="heart_rate">💓 HR</button><button data-t="weight">⚖️</button></div>' +
-      '<div id="hFood"><label>What did you eat?</label><input id="hText" placeholder="Idli + sambar"></div>' +
-      '<div id="hNum" class="hidden"><label id="hNumLbl">Hours slept</label><input id="hVal" type="number" step="0.1" placeholder="7.5"></div>' +
-      '<label>Date</label><input id="hDate" type="date" value="' + todayStr() + '">' +
-      '<div class="actions"><button class="btn btn-gold" id="hSave">Save</button></div>');
-    let type = "food";
-    const lbls = { sleep: "Hours slept", heart_rate: "Heart rate (bpm)", weight: "Weight (kg)" };
-    document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
-      document.querySelectorAll(".seg button").forEach(x => x.classList.remove("on"));
-      b.classList.add("on"); type = b.dataset.t;
-      $("hFood").classList.toggle("hidden", type !== "food");
-      $("hNum").classList.toggle("hidden", type === "food");
-      if (type !== "food") $("hNumLbl").textContent = lbls[type];
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\u{1F37D} Today\u2019s meals</div>' +
+    MEALS.map(mt => {
+      const meals = todayRows.filter(r => r.log_type === "food" && r.meal_type === mt);
+      const mcal = meals.reduce((a, b) => a + +(b.calories || 0), 0);
+      return '<div class="row"><span>' + mealIcons[mt] + ' <b style="text-transform:capitalize">' + mt + '</b><br><span class="small muted">' + (meals.length ? meals.map(x => esc(x.value_text)).join(", ") : "nothing logged yet") + '</span></span>' +
+        '<span class="chip ' + (mcal ? "chip-gold" : "chip-teal") + '">' + Math.round(mcal) + ' kcal</span></div>';
+    }).join("") + '</div>' +
+
+    '<div class="card"><div class="sec-title">Last 7 days</div>' +
+    (rows.length ? rows.slice(0, 40).map(r => {
+      const icon = { food: mealIcons[r.meal_type] || "\u{1F37D}", sleep: "\u{1F634}", heart_rate: "\u{1F493}", weight: "\u2696\uFE0F", burned: "\u{1F3C3}" }[r.log_type] || "\u{1F4DD}";
+      const val = r.log_type === "food" ? esc(r.value_text) + (r.calories ? ' <span class="small gold">' + Math.round(r.calories) + ' kcal</span>' : "")
+        : r.value_num + (r.log_type === "sleep" ? " hrs" : r.log_type === "heart_rate" ? " bpm" : r.log_type === "burned" ? " kcal burned" : " kg");
+      return '<div class="row"><span>' + icon + " " + val + '</span><span class="small muted">' + dateLabel(r.log_date) + (r.meal_type ? " \u00b7 " + r.meal_type : "") + '</span></div>';
+    }).join("") : '<div class="empty">Nothing logged this week</div>') + '</div>' +
+    '<p class="small muted" style="margin-top:12px">\u{1F4A1} Calories auto-estimated from food names (Indian food database built-in). Burned kcal: copy the number from your Apple Watch activity ring each evening \u2014 auto-sync via iPhone Shortcut can be added later.</p>';
+
+  $("addMealBtn").onclick = () => {
+    openModal('<h3>Log a meal <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+      '<div class="seg" id="mealSeg"><button class="on" data-m="breakfast">\u{1F305}</button><button data-m="lunch">\u2600\uFE0F</button><button data-m="dinner">\u{1F319}</button><button data-m="snacks">\u{1F36A}</button></div>' +
+      '<label>What did you eat? (e.g. "3 idli, sambar, tea")</label><input id="mealText" placeholder="3 idli, sambar, 1 tea">' +
+      '<div class="small muted" id="calHint" style="margin-top:6px;min-height:18px"></div>' +
+      '<label>Calories (auto-filled, edit if needed)</label><input id="mealCal" type="number" placeholder="0">' +
+      '<label>Date</label><input id="mealDate" type="date" value="' + todayStr() + '">' +
+      '<div class="actions"><button class="btn btn-gold" id="mealSave">Save meal</button></div>');
+    let mealType = "breakfast";
+    document.querySelectorAll("#mealSeg button").forEach(b => b.onclick = () => {
+      document.querySelectorAll("#mealSeg button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on"); mealType = b.dataset.m;
     });
-    $("hSave").onclick = async () => {
-      if (type === "food") {
-        const t = $("hText").value.trim(); if (!t) { toast("Enter food"); return; }
-        await sbInsert("health_logs", { log_type: "food", value_text: t, log_date: $("hDate").value });
-      } else {
-        const v = +$("hVal").value; if (!v) { toast("Enter value"); return; }
-        await sbInsert("health_logs", { log_type: type, value_num: v, log_date: $("hDate").value });
-      }
-      closeModal(); toast("Logged ✓"); renderHealth();
+    $("mealText").oninput = () => {
+      const est = estimateCalories($("mealText").value);
+      $("mealCal").value = est.total || "";
+      $("calHint").innerHTML = est.found.length ? "\u2713 matched: " + est.found.join(", ") + " = <b>" + est.total + " kcal</b>" : "type food names \u2014 I\u2019ll calculate";
+    };
+    $("mealSave").onclick = async () => {
+      const t = $("mealText").value.trim(); if (!t) { toast("Enter what you ate"); return; }
+      await sbInsert("health_logs", { log_type: "food", meal_type: mealType, value_text: t, calories: +$("mealCal").value || null, log_date: $("mealDate").value });
+      closeModal(); toast("Meal logged \u00b7 " + (+$("mealCal").value || 0) + " kcal"); renderHealth();
+    };
+  };
+  $("addVitalBtn").onclick = () => {
+    openModal('<h3>Log vitals <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+      '<div class="seg" id="vitSeg"><button class="on" data-t="sleep">\u{1F634} Sleep</button><button data-t="heart_rate">\u{1F493} HR</button><button data-t="burned">\u{1F3C3} Burned</button><button data-t="weight">\u2696\uFE0F</button></div>' +
+      '<label id="vitLbl">Hours slept</label><input id="vitVal" type="number" step="0.1" placeholder="7.5">' +
+      '<label>Date</label><input id="vitDate" type="date" value="' + todayStr() + '">' +
+      '<div class="actions"><button class="btn btn-gold" id="vitSave">Save</button></div>');
+    let vt = "sleep";
+    const lbls = { sleep: "Hours slept", heart_rate: "Heart rate (bpm)", burned: "Calories burned (from Apple Watch)", weight: "Weight (kg)" };
+    document.querySelectorAll("#vitSeg button").forEach(b => b.onclick = () => {
+      document.querySelectorAll("#vitSeg button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on"); vt = b.dataset.t; $("vitLbl").textContent = lbls[vt];
+    });
+    $("vitSave").onclick = async () => {
+      const v = +$("vitVal").value; if (!v) { toast("Enter value"); return; }
+      await sbInsert("health_logs", { log_type: vt, value_num: v, log_date: $("vitDate").value });
+      closeModal(); toast("Logged \u2713"); renderHealth();
     };
   };
 }
