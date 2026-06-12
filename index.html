@@ -1207,17 +1207,15 @@ async function renderSnacks() {
   const byPerson = {};
   creditPend.forEach(r => { const p = r.person || "Unknown"; (byPerson[p] = byPerson[p] || []).push(r); });
 
-  const datalist = '<datalist id="snkItems">' + items.map(it => '<option value="' + esc(it.name) + '">').join("") + '</datalist>';
-
   $("main").innerHTML =
-    '<div class="page-title"><span>\U0001F36A Raptor Snacks Shop</span><button class="btn btn-gold btn-sm" id="addSnackBtn">+ Shop entry</button></div>' +
+    '<div class="page-title"><span>\u{1F36A} Raptor Snacks Shop</span><div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" id="manageItemsBtn">\u{1F4E6} Manage items</button><button class="btn btn-gold btn-sm" id="addSnackBtn">+ Shop entry</button></div></div>' +
     '<div class="grid g4" style="margin-bottom:14px">' +
-      '<div class="card stat"><div class="lbl">\U0001F4E6 Invested in stock</div><div class="val">' + fmt(invested) + '</div></div>' +
-      '<div class="card stat"><div class="lbl">\U0001F4B5 Cash received</div><div class="val">' + fmt(received) + '</div></div>' +
-      '<div class="card stat"><div class="lbl">\U0001F4D5 Credit pending</div><div class="val ' + (pendAmt ? "red" : "") + '">' + fmt(pendAmt) + '</div></div>' +
-      '<div class="card stat"><div class="lbl">\U0001F4C8 Profit / loss</div><div class="val ' + (profit >= 0 ? "green" : "red") + '">' + (profit >= 0 ? "+" : "") + fmt(profit) + '</div></div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F4E6} Invested in stock</div><div class="val">' + fmt(invested) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F4B5} Cash received</div><div class="val">' + fmt(received) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F4D5} Credit pending</div><div class="val ' + (pendAmt ? "red" : "") + '">' + fmt(pendAmt) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F4C8} Profit / loss</div><div class="val ' + (profit >= 0 ? "green" : "red") + '">' + (profit >= 0 ? "+" : "") + fmt(profit) + '</div></div></div>' +
 
-    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\U0001F4D5 Credit book \u00b7 who owes the shop</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\u{1F4D5} Credit book \u00b7 who owes the shop</div>' +
     (Object.keys(byPerson).length ? Object.entries(byPerson).map(([p, entries]) => {
       const tot = entries.reduce((a, b) => a + +b.amount, 0);
       return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
@@ -1228,28 +1226,29 @@ async function renderSnacks() {
           '<button class="btn btn-ghost btn-sm editSnack" data-id="' + r.id + '" data-item="' + esc(r.item || "") + '" data-qty="' + (r.qty || 1) + '" data-price="' + (r.unit_price || r.amount) + '" data-person="' + esc(r.person || "") + '">\u270E</button>' +
           '<button class="btn btn-green btn-sm collectSnack" data-id="' + r.id + '" data-person="' + esc(p) + '" data-item="' + esc(r.item || "items") + '" data-amt="' + r.amount + '">\u2713</button></span></div>'
         ).join("") + '</div>';
-    }).join("") : '<div class="empty">No credit pending \u2014 all customers settled \U0001F389</div>') + '</div>' +
+    }).join("") : '<div class="empty">No credit pending \u2014 all customers settled \u{1F389}</div>') + '</div>' +
 
-    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\U0001F4E6 Item catalog <span class="small muted">cost \u00b7 sale price \u00b7 margin</span></div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\u{1F4E6} Item catalog <span class="small muted">cost \u00b7 sale price \u00b7 margin</span></div>' +
     (items.length ? items.map(it => {
       const margin = (it.sale_price && it.cost_price) ? it.sale_price - it.cost_price : null;
       return '<div class="row"><span>' + esc(it.name) + '</span><span class="small muted">cost ' + (it.cost_price ? fmt(it.cost_price) : "\u2014") + ' \u00b7 sale ' + (it.sale_price ? fmt(it.sale_price) : "\u2014") + (margin !== null ? ' \u00b7 <span class="' + (margin >= 0 ? "green" : "red") + '">margin ' + fmt(margin) + '</span>' : "") + '</span></div>';
     }).join("") : '<div class="empty">Items appear here automatically as you log stock & sales</div>') + '</div>' +
 
-    '<div class="card"><div class="sec-title">\U0001F9FE Shop ledger \u00b7 stock in & sales out</div>' +
+    '<div class="card"><div class="sec-title">\u{1F9FE} Shop ledger \u00b7 stock in & sales out</div>' +
     (rows.length ? rows.slice(0, 50).map(r => {
       const isIn = r.entry_type === "stock_in" || r.entry_type === "investment";
       const isCol = r.entry_type === "collection";
-      const arrow = isIn ? '<span class="chip chip-gold">\u2B07 IN</span>' : isCol ? '<span class="chip chip-green">\U0001F4B5 PAID</span>' : '<span class="chip chip-teal">\u2B06 OUT</span>';
+      const arrow = isIn ? '<span class="chip chip-gold">\u2B07 IN</span>' : isCol ? '<span class="chip chip-green">\u{1F4B5} PAID</span>' : '<span class="chip chip-teal">\u2B06 OUT</span>';
       const desc = (r.item ? esc(r.item) : (isIn ? "stock purchase" : isCol ? "payment received" : "sale")) + (r.qty ? " \u00d7 " + r.qty : "") + (r.unit_price ? " @ " + fmt(r.unit_price) : "");
       const who = r.person ? (isIn ? " \u00b7 from " + esc(r.person) : " \u00b7 " + esc(r.person)) : "";
       const pay = r.entry_type === "sale" ? (r.status === "pending" ? ' <span class="chip chip-red">credit</span>' : ' <span class="chip chip-green">cash</span>') : "";
       return '<div class="row"><span>' + arrow + " " + desc + '<span class="small muted">' + who + " \u00b7 " + dateLabel(r.entry_date) + (r.note ? " \u00b7 " + esc(r.note) : "") + '</span>' + pay + '</span>' +
-        '<span style="display:flex;align-items:center;gap:6px"><b class="' + (isIn ? "" : "green") + '">' + (isIn ? "\u2212" : "+") + fmt(r.amount) + '</b><button class="del delSnk" data-id="' + r.id + '">\U0001F5D1</button></span></div>';
+        '<span style="display:flex;align-items:center;gap:6px"><b class="' + (isIn ? "" : "green") + '">' + (isIn ? "\u2212" : "+") + fmt(r.amount) + '</b><button class="del delSnk" data-id="' + r.id + '">\u{1F5D1}</button></span></div>';
     }).join("") : '<div class="empty">Shop is empty \u2014 add your first stock purchase</div>') + '</div>' +
-    datalist;
+    '';
 
-  $("addSnackBtn").onclick = () => snackEntryModal(itemMap);
+  $("addSnackBtn").onclick = () => snackEntryModal(itemMap, items);
+  $("manageItemsBtn").onclick = () => itemManagerModal(items);
 
   $("main").querySelectorAll(".editSnack").forEach(b => b.onclick = () => snackEditModal(b.dataset));
 
@@ -1277,10 +1276,17 @@ async function upsertSnackItem(name, field, value) {
   else await sbInsert("snack_items", { name: name, [field]: value });
 }
 
-function snackEntryModal(itemMap) {
+function snackEntryModal(itemMap, items) {
+  const itemOptions = '<option value="">\u2014 select item \u2014</option>' +
+    items.map(it => '<option value="' + esc(it.name) + '">' + esc(it.name) + '</option>').join("") +
+    '<option value="__new__">+ New item\u2026</option>';
+
   openModal('<h3>Shop entry <button class="x" onclick="closeModal()">\u2715</button></h3>' +
-    '<div class="seg" id="snkSeg"><button class="on" data-t="stock_in">\U0001F4E6 Stock in</button><button data-t="sale">\U0001F6D2 Sale</button><button data-t="collection">\U0001F4B5 Payment recd</button></div>' +
-    '<div id="snItemWrap"><label>Item</label><input id="snItem" list="snkItems" placeholder="Lays, biscuits, chocolates\u2026"></div>' +
+    '<div class="seg" id="snkSeg"><button class="on" data-t="stock_in">\u{1F4E6} Stock in</button><button data-t="sale">\u{1F6D2} Sale</button><button data-t="collection">\u{1F4B5} Payment recd</button></div>' +
+    '<div id="snItemWrap">' +
+      '<label>Item</label><select id="snItemSel">' + itemOptions + '</select>' +
+      '<input id="snItemNew" class="hidden" placeholder="New item name\u2026" style="margin-top:8px">' +
+    '</div>' +
     '<div id="snQtyWrap" class="form-grid">' +
       '<div><label id="snQtyLbl">Quantity</label><input id="snQty" type="number" value="1"></div>' +
       '<div><label id="snPriceLbl">Cost per unit</label><input id="snPrice" type="number" step="0.01" placeholder="10"></div>' +
@@ -1288,7 +1294,7 @@ function snackEntryModal(itemMap) {
     '<div id="snTotalWrap" class="small muted" style="margin:6px 0 4px">Total: \u20b90</div>' +
     '<div id="snColWrap" class="hidden"><label>Amount received</label><input id="snColAmt" type="number" placeholder="500"></div>' +
     '<div id="snPersonWrap" class="hidden"><label id="snPersonLbl">Sold to</label><input id="snPerson" placeholder="Name"></div>' +
-    '<div id="snPayWrap" class="hidden"><label>Payment</label><div class="seg" id="snPaySeg"><button class="on" data-p="cash">\U0001F4B5 Cash now</button><button data-p="credit">\U0001F4D5 Credit (pending)</button></div></div>' +
+    '<div id="snPayWrap" class="hidden"><label>Payment</label><div class="seg" id="snPaySeg"><button class="on" data-p="cash">\u{1F4B5} Cash now</button><button data-p="credit">\u{1F4D5} Credit (pending)</button></div></div>' +
     '<div id="snAccWrap"><label id="snAccLbl">Paid from</label><select id="snAcc">' + accountOptions() + '</select></div>' +
     '<label>Note (optional)</label><input id="snNote" placeholder="\u2026">' +
     '<div class="actions"><button class="btn btn-gold" id="snSave">Save entry</button></div>');
@@ -1300,11 +1306,18 @@ function snackEntryModal(itemMap) {
   };
   $("snQty").oninput = recalc; $("snPrice").oninput = recalc;
 
-  $("snItem").oninput = () => {
-    const it = itemMap[$("snItem").value.trim().toLowerCase()];
+  function currentItemName() {
+    return $("snItemSel").value === "__new__" ? $("snItemNew").value.trim() : $("snItemSel").value;
+  }
+
+  $("snItemSel").onchange = () => {
+    const v = $("snItemSel").value;
+    $("snItemNew").classList.toggle("hidden", v !== "__new__");
+    if (v === "__new__") { $("snItemNew").focus(); $("snPrice").value = ""; recalc(); return; }
+    const it = itemMap[v.toLowerCase()];
     if (!it) return;
-    if (type === "stock_in" && it.cost_price && !$("snPrice").value) $("snPrice").value = it.cost_price;
-    if (type === "sale" && it.sale_price && !$("snPrice").value) $("snPrice").value = it.sale_price;
+    if (type === "stock_in" && it.cost_price) $("snPrice").value = it.cost_price;
+    if (type === "sale" && it.sale_price) $("snPrice").value = it.sale_price;
     recalc();
   };
 
@@ -1321,7 +1334,13 @@ function snackEntryModal(itemMap) {
     $("snPriceLbl").textContent = t === "stock_in" ? "Cost per unit" : "Sale price per unit";
     $("snPersonLbl").textContent = t === "sale" ? "Sold to" : "Received from";
     $("snAccLbl").textContent = t === "stock_in" ? "Paid from" : "Received into";
-    $("snPrice").value = ""; recalc();
+    if ($("snItemSel").value && $("snItemSel").value !== "__new__") {
+      const it = itemMap[$("snItemSel").value.toLowerCase()];
+      $("snPrice").value = it ? (t === "stock_in" ? (it.cost_price || "") : (it.sale_price || "")) : "";
+    } else {
+      $("snPrice").value = "";
+    }
+    recalc();
   }
   document.querySelectorAll("#snkSeg button").forEach(b => b.onclick = () => {
     document.querySelectorAll("#snkSeg button").forEach(x => x.classList.remove("on"));
@@ -1334,17 +1353,17 @@ function snackEntryModal(itemMap) {
   });
 
   $("snSave").onclick = async () => {
-    const item = $("snItem").value.trim();
+    const item = currentItemName();
     if (type === "collection") {
       const amt = +$("snColAmt").value; if (!amt) { toast("Enter amount"); return; }
       const person = $("snPerson").value.trim();
       await sbInsert("snack_entries", { entry_type: "collection", amount: amt, person: person || null, status: "done", entry_date: todayStr(), account_id: +$("snAcc").value, note: $("snNote").value || null });
       await sbInsert("incomes", { source: (person || "Shop") + " - payment", amount: amt, account_id: +$("snAcc").value });
-      closeModal(); toast("Payment recorded \U0001F9FE"); renderSnacks();
+      closeModal(); toast("Payment recorded \u{1F9FE}"); renderSnacks();
       return;
     }
     const qty = +$("snQty").value || 1, price = +$("snPrice").value;
-    if (!item || !price) { toast("Item and price needed"); return; }
+    if (!item || !price) { toast("Pick or name an item, and enter a price"); return; }
     const total = qty * price;
     if (type === "stock_in") {
       await upsertSnackItem(item, "cost_price", price);
@@ -1362,6 +1381,38 @@ function snackEntryModal(itemMap) {
   };
   setType("stock_in");
 }
+
+function itemManagerModal(items) {
+  openModal('<h3>\u{1F4E6} Manage items <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+    '<p class="small muted" style="margin-bottom:10px">Set cost price (what you paid) and sale price (what you charge) for each item. These auto-fill next time you log stock or a sale.</p>' +
+    '<div id="imList">' + (items.length ? items.map(it =>
+      '<div class="form-grid" style="align-items:end;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:8px">' +
+        '<div style="grid-column:1/-1"><label style="margin:0 0 4px">' + esc(it.name) + '</label></div>' +
+        '<div><label style="margin:0 0 4px">Cost price</label><input type="number" step="0.01" class="imCost" data-id="' + it.id + '" value="' + (it.cost_price || "") + '"></div>' +
+        '<div><label style="margin:0 0 4px">Sale price</label><input type="number" step="0.01" class="imSale" data-id="' + it.id + '" value="' + (it.sale_price || "") + '"></div>' +
+      '</div>'
+    ).join("") : '<div class="empty">No items yet \u2014 add one below</div>') + '</div>' +
+    '<label>Add new item</label>' +
+    '<div class="form-grid"><div><input id="imNewName" placeholder="Item name"></div><div></div>' +
+    '<div><input id="imNewCost" type="number" step="0.01" placeholder="Cost price"></div>' +
+    '<div><input id="imNewSale" type="number" step="0.01" placeholder="Sale price"></div></div>' +
+    '<div class="actions"><button class="btn btn-gold" id="imSave">Save</button></div>');
+
+  $("imSave").onclick = async () => {
+    for (const inp of $("imList").querySelectorAll(".imCost")) {
+      await sbUpdate("snack_items", "id=eq." + inp.dataset.id, { cost_price: inp.value === "" ? null : +inp.value });
+    }
+    for (const inp of $("imList").querySelectorAll(".imSale")) {
+      await sbUpdate("snack_items", "id=eq." + inp.dataset.id, { sale_price: inp.value === "" ? null : +inp.value });
+    }
+    const newName = $("imNewName").value.trim();
+    if (newName) {
+      await sbInsert("snack_items", { name: newName, cost_price: +$("imNewCost").value || null, sale_price: +$("imNewSale").value || null });
+    }
+    closeModal(); toast("Items updated \u2713"); renderSnacks();
+  };
+}
+
 
 function snackEditModal(d) {
   openModal('<h3>Edit entry <button class="x" onclick="closeModal()">\u2715</button></h3>' +
@@ -1388,7 +1439,7 @@ function snackEditModal(d) {
    HEALTH \u2014 date-wise meal log (Excel-style)
 ===================================================== */
 const MEALS = ["breakfast", "lunch", "dinner", "snacks"];
-const MEAL_ICONS = { breakfast: "\U0001F305", lunch: "\u2600\uFE0F", dinner: "\U0001F319", snacks: "\U0001F36A" };
+const MEAL_ICONS = { breakfast: "\u{1F305}", lunch: "\u2600\uFE0F", dinner: "\u{1F319}", snacks: "\u{1F36A}" };
 const MEAL_LABELS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snacks: "Snacks" };
 let healthDays = 14;
 
@@ -1430,17 +1481,17 @@ async function renderHealth() {
 
   $("main").innerHTML =
     '<div class="page-title"><span>\u2764\uFE0F Health log</span><div style="display:flex;gap:8px;flex-wrap:wrap">' +
-      '<button class="btn btn-ghost btn-sm" id="copyLogBtn">\U0001F4CB Copy log</button>' +
+      '<button class="btn btn-ghost btn-sm" id="copyLogBtn">\u{1F4CB} Copy log</button>' +
       '<button class="btn btn-ghost btn-sm" id="addVitalBtn">+ Sleep / HR / Burned</button>' +
       '<button class="btn btn-gold btn-sm" id="addMealBtn">+ Meal</button></div></div>' +
     '<div class="grid g4" style="margin-bottom:14px">' +
-      '<div class="card stat"><div class="lbl">\U0001F634 Avg sleep (' + healthDays + 'd)</div><div class="val">' + avgSleep + '<span class="small muted"> hrs</span></div></div>' +
-      '<div class="card stat"><div class="lbl">\U0001F493 Avg heart rate (' + healthDays + 'd)</div><div class="val">' + avgHr + '<span class="small muted"> bpm</span></div></div>' +
-      '<div class="card stat"><div class="lbl">\U0001F3C3 Burned today</div><div class="val">' + Math.round(burnToday) + '<span class="small muted"> kcal</span></div></div>' +
-      '<div class="card stat"><div class="lbl">\U0001F4C5 Showing</div><div class="val" style="font-size:19px">last ' + healthDays + ' days</div>' +
+      '<div class="card stat"><div class="lbl">\u{1F634} Avg sleep (' + healthDays + 'd)</div><div class="val">' + avgSleep + '<span class="small muted"> hrs</span></div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F493} Avg heart rate (' + healthDays + 'd)</div><div class="val">' + avgHr + '<span class="small muted"> bpm</span></div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F3C3} Burned today</div><div class="val">' + Math.round(burnToday) + '<span class="small muted"> kcal</span></div></div>' +
+      '<div class="card stat"><div class="lbl">\u{1F4C5} Showing</div><div class="val" style="font-size:19px">last ' + healthDays + ' days</div>' +
         '<button class="btn btn-ghost btn-sm" id="moreDaysBtn" style="margin-top:8px">Show 30 days</button></div></div>' +
 
-    '<div class="card" style="overflow-x:auto"><div class="sec-title">\U0001F37D Daily log</div>' +
+    '<div class="card" style="overflow-x:auto"><div class="sec-title">\u{1F37D} Daily log</div>' +
     '<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px">' +
     '<thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)">Date</th>' +
     MEALS.map(mt => '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)">' + MEAL_ICONS[mt] + ' ' + MEAL_LABELS[mt] + '</th>').join("") +
@@ -1448,9 +1499,9 @@ async function renderHealth() {
     dates.map(d => {
       const day = byDate[d];
       const vitalsTxt = day.vitals.map(v => {
-        if (v.log_type === "sleep") return "\U0001F634" + v.value_num + "h";
-        if (v.log_type === "heart_rate") return "\U0001F493" + v.value_num;
-        if (v.log_type === "burned") return "\U0001F3C3" + v.value_num;
+        if (v.log_type === "sleep") return "\u{1F634}" + v.value_num + "h";
+        if (v.log_type === "heart_rate") return "\u{1F493}" + v.value_num;
+        if (v.log_type === "burned") return "\u{1F3C3}" + v.value_num;
         if (v.log_type === "weight") return "\u2696" + v.value_num + "kg";
         return "";
       }).join(" ");
@@ -1465,7 +1516,7 @@ async function renderHealth() {
         '</tr>';
     }).join("") +
     '</tbody></table></div>' +
-    '<p class="small muted" style="margin-top:12px">\U0001F4A1 Tap any cell to add or edit what you ate. Use \u201CCopy log\u201D at month-end to paste into an AI tool for a nutrition report \u2014 calories aren\u2019t auto-calculated here.</p>' +
+    '<p class="small muted" style="margin-top:12px">\u{1F4A1} Tap any cell to add or edit what you ate. Use \u201CCopy log\u201D at month-end to paste into an AI tool for a nutrition report \u2014 calories aren\u2019t auto-calculated here.</p>' +
     datalists;
 
   $("main").querySelectorAll(".mealCell").forEach(td => td.onclick = () => mealCellModal(td.dataset, sugg));
@@ -1475,7 +1526,7 @@ async function renderHealth() {
 
   $("addVitalBtn").onclick = () => {
     openModal('<h3>Log vitals <button class="x" onclick="closeModal()">\u2715</button></h3>' +
-      '<div class="seg" id="vitSeg"><button class="on" data-t="sleep">\U0001F634 Sleep</button><button data-t="heart_rate">\U0001F493 HR</button><button data-t="burned">\U0001F3C3 Burned</button><button data-t="weight">\u2696\uFE0F Weight</button></div>' +
+      '<div class="seg" id="vitSeg"><button class="on" data-t="sleep">\u{1F634} Sleep</button><button data-t="heart_rate">\u{1F493} HR</button><button data-t="burned">\u{1F3C3} Burned</button><button data-t="weight">\u2696\uFE0F Weight</button></div>' +
       '<label id="vitLbl">Hours slept</label><input id="vitVal" type="number" step="0.1" placeholder="7.5">' +
       '<label>Date</label><input id="vitDate" type="date" value="' + todayStr() + '">' +
       '<div class="actions"><button class="btn btn-gold" id="vitSave">Save</button></div>');
