@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>RaptorVault</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%231a1408'/%3E%3Crect x='4' y='4' width='92' height='92' rx='18' fill='none' stroke='%23e8b14e' stroke-width='3'/%3E%3Ctext x='50' y='66' font-size='52' text-anchor='middle'%3E%F0%9F%A6%85%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -112,7 +113,28 @@ nav::-webkit-scrollbar{display:none}
 .month-nav{display:flex;align-items:center;gap:8px}
 .month-nav button{width:30px;height:30px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--text)}
 .month-nav span{font-size:13.5px;font-weight:600;min-width:86px;text-align:center}
-.seg{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:10px 0}
+.seg{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:10px 0;flex-wrap:wrap}
+@media(max-width:640px){
+  body{font-size:14px}
+  #app{padding:0 10px 90px}
+  header{padding:12px 0 8px}
+  .brand{font-size:17px}
+  .brand .mini-logo{width:30px;height:30px;font-size:15px}
+  .tab{padding:8px 12px;font-size:12.5px}
+  .stat .val{font-size:20px}
+  .card{padding:13px 14px}
+  .modal{padding:18px;max-width:94vw;max-height:92vh}
+  .grid.g4{grid-template-columns:repeat(2,1fr)}
+  #fab{right:14px;bottom:16px;width:52px;height:52px;font-size:23px}
+  .form-grid{grid-template-columns:1fr}
+  .row{font-size:12.5px}
+  .page-title{font-size:16px}
+  .icon-btn{width:34px;height:34px}
+}
+@media(max-width:380px){
+  .grid.g4{grid-template-columns:1fr 1fr}
+  .tab{padding:7px 9px;font-size:12px}
+}
 .seg button{flex:1;border:none;background:none;color:var(--muted);padding:9px;font-size:13px;font-weight:600}
 .seg button.on{background:var(--gold-bg);color:var(--gold)}
 </style>
@@ -206,19 +228,20 @@ async function sbQuery(table, params) {
 async function sbInsert(table, data) {
   await freshToken();
   const r = await fetch(SB_URL + "/rest/v1/" + table, { method: "POST", headers: sbHeaders(), body: JSON.stringify(data) });
-  if (!r.ok) { console.error(await r.text()); toast("Save failed"); return null; }
+  if (!r.ok) { const t = await r.text(); console.error(t); toast("Save failed: " + sbErrMsg(t)); return null; }
   return r.json();
 }
+function sbErrMsg(t) { try { const d = JSON.parse(t); return d.message || d.hint || d.error || "unknown error"; } catch (e) { return "unknown error"; } }
 async function sbUpdate(table, match, data) {
   await freshToken();
   const r = await fetch(SB_URL + "/rest/v1/" + table + "?" + match, { method: "PATCH", headers: sbHeaders(), body: JSON.stringify(data) });
-  if (!r.ok) { console.error(await r.text()); toast("Update failed"); return null; }
+  if (!r.ok) { const t = await r.text(); console.error(t); toast("Update failed: " + sbErrMsg(t)); return null; }
   return r.json();
 }
 async function sbDelete(table, match) {
   await freshToken();
   const r = await fetch(SB_URL + "/rest/v1/" + table + "?" + match, { method: "DELETE", headers: sbHeaders() });
-  if (!r.ok) { console.error(await r.text()); toast("Delete failed"); }
+  if (!r.ok) { const t = await r.text(); console.error(t); toast("Delete failed: " + sbErrMsg(t)); }
 }
 
 /* ---------------- Utils ---------------- */
@@ -448,9 +471,9 @@ async function ensureMonthlyData() {
 ===================================================== */
 async function renderDashboard() {
   const m = curMonth();
-  const [salaries, spends, loans, loanPays, cardBills, bills, lendings, splitCols, otMembers, snacks, borrowings, incomes, allSpends, allIncomes, allSalaries] = await Promise.all([
+  const [salaries, spends, loans, loanPays, cardBills, bills, lendings, splitCols, otMembers, snacks, borrowings, incomes, allSpends, allIncomes, allSalaries, recentSpends, recentIncomes] = await Promise.all([
     sbQuery("salaries", "select=amount&month=eq." + m),
-    sbQuery("spends", "select=amount&spent_at=gte." + m + "-01"),
+    sbQuery("spends", "select=amount,account_id&spent_at=gte." + m + "-01"),
     sbQuery("loans", "select=*&status=eq.active"),
     sbQuery("loan_payments", "select=loan_id,month"),
     sbQuery("card_bills", "select=*,accounts(name)&month=eq." + m),
@@ -463,10 +486,13 @@ async function renderDashboard() {
     sbQuery("incomes", "select=amount&received_at=gte." + m + "-01"),
     sbQuery("spends", "select=amount,account_id,spent_at"),
     sbQuery("incomes", "select=amount,account_id,received_at"),
-    sbQuery("salaries", "select=amount,account_id,created_at")
+    sbQuery("salaries", "select=amount,account_id,created_at"),
+    sbQuery("spends", "select=*,accounts(name)&order=spent_at.desc&limit=10"),
+    sbQuery("incomes", "select=*,accounts(name)&order=received_at.desc&limit=10")
   ]);
   if (activeTab !== "dashboard") return;
 
+  const ccIds = new Set(ACCOUNTS.filter(a => a.type === "credit_card").map(a => a.id));
   const salary = salaries.reduce((a, b) => a + +b.amount, 0);
   const extraIn = incomes.reduce((a, b) => a + +b.amount, 0);
   const balances = ACCOUNTS.filter(a => a.type !== "credit_card").map(a => {
@@ -476,16 +502,27 @@ async function renderDashboard() {
     const sal = allSalaries.filter(s => s.account_id === a.id && s.created_at > setAt).reduce((x, y) => x + +y.amount, 0);
     return { acc: a, bal: +(a.opening_balance || 0) + sal + inc - sp, isSet: !!a.balance_set_at };
   });
+  const recentTx = [
+    ...recentSpends.map(s => ({ out: true, label: s.item, amt: +s.amount, acc: s.accounts ? s.accounts.name : "", at: s.spent_at })),
+    ...recentIncomes.map(i => ({ out: false, label: i.source, amt: +i.amount, acc: i.accounts ? i.accounts.name : "", at: i.received_at }))
+  ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 12);
   const savingsSet = balances.filter(b => b.isSet).length;
   const totalSavings = balances.filter(b => b.isSet).reduce((a, b) => a + b.bal, 0);
-  const spent = spends.reduce((a, b) => a + +b.amount, 0);
+  const spent = spends.filter(s => !ccIds.has(s.account_id)).reduce((a, b) => a + +b.amount, 0);
+  const ccMonthSpend = {};
+  spends.forEach(s => { if (ccIds.has(s.account_id)) ccMonthSpend[s.account_id] = (ccMonthSpend[s.account_id] || 0) + +s.amount; });
   const loanInfo = loans.map(l => {
     const paidSet = new Set(loanPays.filter(p => p.loan_id === l.id).map(p => p.month));
     const pend = loanMonthsPending(l, paidSet);
     return { name: l.name, balance: pend.length * +l.emi_amount, left: pend.length, end: l.end_month };
   }).filter(l => l.balance > 0).sort((a, b) => b.balance - a.balance);
   const loanDebt = loanInfo.reduce((a, b) => a + b.balance, 0);
-  const cardDebt = cardBills.filter(c => c.status === "pending").reduce((a, b) => a + +b.amount_due, 0);
+  const cardInfo = ACCOUNTS.filter(a => a.type === "credit_card" && a.is_active).map(c => {
+    const bill = cardBills.find(b => b.account_id === c.id);
+    const debt = (bill && bill.status === "pending") ? +bill.amount_due : (ccMonthSpend[c.id] || 0);
+    return { name: c.name, debt: debt, due: bill ? bill.due_date : null, hasBill: !!bill };
+  }).filter(c => c.debt > 0);
+  const cardDebt = cardInfo.reduce((a, b) => a + b.debt, 0);
   const oweMe = lendings.reduce((a, b) => a + +b.amount, 0)
     + splitCols.reduce((a, b) => a + +b.amount, 0)
     + otMembers.reduce((a, b) => a + +b.amount, 0)
@@ -493,15 +530,14 @@ async function renderDashboard() {
 
   const today = todayStr();
   const pendingBills = bills.filter(b => b.status === "pending");
-  const maxDebt = Math.max(...loanInfo.map(l => l.balance), ...cardBills.map(c => +c.amount_due), 1);
+  const maxDebt = Math.max(...loanInfo.map(l => l.balance), ...cardInfo.map(c => c.debt), 1);
 
   let debtBars = "";
   loanInfo.forEach(l => {
     debtBars += '<div class="bar-row"><div class="top"><span>' + esc(l.name) + ' <span class="muted">· ' + l.left + ' EMIs left · ends ' + monthLabel(l.end) + '</span></span><span class="muted">' + fmt(l.balance) + '</span></div><div class="bar-wrap"><div class="bar" style="width:' + Math.max(3, l.balance / maxDebt * 100) + '%;background:var(--gold)"></div></div></div>';
   });
-  cardBills.forEach(c => {
-    if (c.status !== "pending") return;
-    debtBars += '<div class="bar-row"><div class="top"><span>' + esc(c.accounts ? c.accounts.name : "Card") + ' <span class="muted">· due ' + dateLabel(c.due_date) + '</span></span><span class="muted">' + fmt(c.amount_due) + '</span></div><div class="bar-wrap"><div class="bar" style="width:' + Math.max(3, c.amount_due / maxDebt * 100) + '%;background:var(--red)"></div></div></div>';
+  cardInfo.forEach(c => {
+    debtBars += '<div class="bar-row"><div class="top"><span>' + esc(c.name) + ' <span class="muted">· ' + (c.hasBill ? "due " + dateLabel(c.due) : "this month’s spend") + '</span></span><span class="muted">' + fmt(c.debt) + '</span></div><div class="bar-wrap"><div class="bar" style="width:' + Math.max(3, c.debt / maxDebt * 100) + '%;background:var(--red)"></div></div></div>';
   });
   if (!debtBars) debtBars = '<div class="empty">No active debts. Vault is free! 🎉</div>';
 
@@ -549,7 +585,12 @@ async function renderDashboard() {
           '<div class="row"><span>' + esc(b.person) + ' <span class="muted small">· ' + (b.due_date ? "by " + dateLabel(b.due_date) : "no date") + '</span></span>' +
           '<span style="display:flex;align-items:center;gap:7px"><span class="chip ' + (b.due_date && b.due_date < today ? "chip-red" : "chip-gold") + '">' + fmt(b.amount) + '</span><button class="btn btn-green btn-sm payBorD" data-id="' + b.id + '" data-person="' + esc(b.person) + '" data-amt="' + b.amount + '">✓</button></span></div>'
         ).join("") : "") + '</div>' +
-    '</div>';
+    '</div>' +
+    '<div style="height:14px"></div>' +
+    '<div class="card"><div class="sec-title">🕑 Recent activity</div>' +
+    (recentTx.length ? recentTx.map(t =>
+      '<div class="row"><span>' + (t.out ? "💸" : "💰") + " " + esc(t.label) + '<br><span class="small muted">' + dtLabel(t.at) + (t.acc ? " · " + esc(t.acc) : "") + '</span></span><b class="' + (t.out ? "red" : "green") + '">' + (t.out ? "−" : "+") + fmt(t.amt) + '</b></div>'
+    ).join("") : '<div class="empty">Nothing logged yet</div>') + '</div>';
 
   $("main").querySelectorAll(".setBal").forEach(b => b.onclick = () => {
     openModal('<h3>' + b.dataset.name + ' balance <button class="x" onclick="closeModal()">\u2715</button></h3>' +
@@ -685,7 +726,7 @@ async function renderSpends() {
     '<div class="card" style="margin-bottom:14px"><div class="sec-title">Total: <span class="gold">' + fmt(total) + '</span></div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap">' + Object.entries(byAcc).map(([k, v]) => '<span class="chip chip-teal">' + esc(k) + " · " + fmt(v) + '</span>').join("") + '</div></div>' +
     (ins.length ? '<div class="card" style="margin-bottom:14px"><div class="sec-title">\u{1F4B0} Money in \u00b7 <span class="green">' + fmt(inTotal) + '</span></div>' +
-      ins.map(i => '<div class="row"><span>' + esc(i.source) + '<br><span class="small muted">' + dtLabel(i.received_at) + " \u00b7 " + esc(i.accounts ? i.accounts.name : "") + '</span></span><b class="green">+' + fmt(i.amount) + '</b></div>').join("") + '</div>' : "") +
+      ins.map(i => '<div class="row"><span>' + esc(i.source) + '<br><span class="small muted">' + dtLabel(i.received_at) + " \u00b7 " + esc(i.accounts ? i.accounts.name : "") + '</span></span><span style="display:flex;align-items:center;gap:6px"><b class="green">+' + fmt(i.amount) + '</b><button class="del delInc" data-id="' + i.id + '">🗑</button></span></div>').join("") + '</div>' : "") +
     '<div class="card">' +
     (rows.length ? rows.map(r =>
       '<div class="row"><span>' + esc(r.item) + '<br><span class="small muted">' + dtLabel(r.spent_at) + " · " + esc(r.accounts ? r.accounts.name : "") + (r.category ? " · " + esc(r.category) : "") + '</span></span>' +
@@ -697,6 +738,10 @@ async function renderSpends() {
   $("main").querySelectorAll(".del").forEach(b => b.onclick = async () => {
     if (!confirm("Delete this spend?")) return;
     await sbDelete("spends", "id=eq." + b.dataset.id); renderSpends();
+  });
+  $("main").querySelectorAll(".delInc").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this income entry?")) return;
+    await sbDelete("incomes", "id=eq." + b.dataset.id); renderSpends();
   });
 }
 
@@ -996,7 +1041,7 @@ async function renderDues() {
     (cols.length ? cols.map(c =>
       '<div class="row"><span class="' + (c.status === "pending" ? "red" : "muted") + '"' + (c.status === "received" ? ' style="text-decoration:line-through"' : "") + '>' + esc(c.person) + ' <span class="small muted">· ' + esc(c.recurring_splits ? c.recurring_splits.name : "") + '</span></span>' +
       '<span style="display:flex;align-items:center;gap:8px"><b class="' + (c.status === "pending" ? "red" : "green") + '">' + fmt(c.amount) + '</b>' +
-      (c.status === "pending" ? '<button class="btn btn-green btn-sm markCol" data-id="' + c.id + '" data-person="' + esc(c.person) + '" data-amt="' + c.amount + '">✓</button>' : '<span class="chip chip-green">✓</span>') + '</span></div>'
+      (c.status === "pending" ? '<button class="btn btn-green btn-sm markCol" data-id="' + c.id + '" data-person="' + esc(c.person) + '" data-amt="' + c.amount + '">✓</button>' : '<span class="chip chip-green">✓</span> <button class="del delCol" data-id="' + c.id + '">🗑</button>') + '</span></div>'
     ).join("") : '<div class="empty">No recurring splits set up — add Netflix etc.</div>') +
     (splits.length ? '<div class="small muted" style="margin-top:10px">' + splits.map(s => esc(s.name) + " " + fmt(s.total_amount) + " ÷ " + ((s.recurring_split_members || []).length + 1) + ' <button class="del delRs" data-id="' + s.id + '">🗑</button>').join(" · ") + '</div>' : "") + '</div>' +
 
@@ -1009,7 +1054,7 @@ async function renderDues() {
         '<div style="display:flex;gap:7px;flex-wrap:wrap">' + mems.map(x =>
           x.status === "pending"
             ? '<button class="chip chip-red markOt" data-id="' + x.id + '" data-person="' + esc(x.person) + '" data-amt="' + x.amount + '" style="border:1px solid var(--red);cursor:pointer">' + esc(x.person) + " " + fmt(x.amount) + ' · tap when paid</button>'
-            : '<span class="chip chip-green" style="text-decoration:line-through">' + esc(x.person) + " " + fmt(x.amount) + '</span>'
+            : '<span class="chip chip-green" style="text-decoration:line-through">' + esc(x.person) + " " + fmt(x.amount) + '</span> <button class="del delOtm" data-id="' + x.id + '">🗑</button>'
         ).join("") + '</div></div>';
     }).join("") : '<div class="empty">No one-time splits yet — biryani Sunday awaits 🍛</div>') + '</div>';
 
@@ -1133,96 +1178,91 @@ async function renderDues() {
     if (!confirm("Stop this recurring split?")) return;
     await sbUpdate("recurring_splits", "id=eq." + b.dataset.id, { is_active: false }); renderDues();
   });
+  $("main").querySelectorAll(".delCol").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this entry?")) return;
+    await sbDelete("split_collections", "id=eq." + b.dataset.id); renderDues();
+  });
+  $("main").querySelectorAll(".delOtm").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this entry?")) return;
+    await sbDelete("onetime_split_members", "id=eq." + b.dataset.id); renderDues();
+  });
 }
 
 /* =====================================================
-   SNACKS — retail shop ledger
+   SNACKS \u2014 retail shop ledger with item catalog
 ===================================================== */
 async function renderSnacks() {
-  const rows = await sbQuery("snack_entries", "select=*&order=entry_date.desc,id.desc&limit=200");
+  const [rows, items] = await Promise.all([
+    sbQuery("snack_entries", "select=*&order=entry_date.desc,id.desc&limit=200"),
+    sbQuery("snack_items", "select=*&order=name")
+  ]);
   if (activeTab !== "snacks") return;
   const invested = rows.filter(r => r.entry_type === "stock_in" || r.entry_type === "investment").reduce((a, b) => a + +b.amount, 0);
   const received = rows.filter(r => ((r.entry_type === "sale") && r.status === "done") || r.entry_type === "collection").reduce((a, b) => a + +b.amount, 0);
   const creditPend = rows.filter(r => r.entry_type === "sale" && r.status === "pending");
   const pendAmt = creditPend.reduce((a, b) => a + +b.amount, 0);
   const profit = received - invested;
+  const itemMap = {}; items.forEach(it => itemMap[it.name.toLowerCase()] = it);
 
   const byPerson = {};
   creditPend.forEach(r => { const p = r.person || "Unknown"; (byPerson[p] = byPerson[p] || []).push(r); });
 
-  $("main").innerHTML =
-    '<div class="page-title"><span>\u{1F36A} Raptor Snacks Shop</span><button class="btn btn-gold btn-sm" id="addSnackBtn">+ Shop entry</button></div>' +
-    '<div class="grid g4" style="margin-bottom:14px">' +
-      '<div class="card stat"><div class="lbl">\u{1F4E6} Invested in stock</div><div class="val">' + fmt(invested) + '</div></div>' +
-      '<div class="card stat"><div class="lbl">\u{1F4B5} Cash received</div><div class="val">' + fmt(received) + '</div></div>' +
-      '<div class="card stat"><div class="lbl">\u{1F4D5} Credit pending</div><div class="val ' + (pendAmt ? "red" : "") + '">' + fmt(pendAmt) + '</div></div>' +
-      '<div class="card stat"><div class="lbl">\u{1F4C8} Profit / loss</div><div class="val ' + (profit >= 0 ? "green" : "red") + '">' + (profit >= 0 ? "+" : "") + fmt(profit) + '</div></div></div>' +
+  const datalist = '<datalist id="snkItems">' + items.map(it => '<option value="' + esc(it.name) + '">').join("") + '</datalist>';
 
-    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\u{1F4D5} Credit book \u00b7 who owes the shop</div>' +
+  $("main").innerHTML =
+    '<div class="page-title"><span>\U0001F36A Raptor Snacks Shop</span><button class="btn btn-gold btn-sm" id="addSnackBtn">+ Shop entry</button></div>' +
+    '<div class="grid g4" style="margin-bottom:14px">' +
+      '<div class="card stat"><div class="lbl">\U0001F4E6 Invested in stock</div><div class="val">' + fmt(invested) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">\U0001F4B5 Cash received</div><div class="val">' + fmt(received) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">\U0001F4D5 Credit pending</div><div class="val ' + (pendAmt ? "red" : "") + '">' + fmt(pendAmt) + '</div></div>' +
+      '<div class="card stat"><div class="lbl">\U0001F4C8 Profit / loss</div><div class="val ' + (profit >= 0 ? "green" : "red") + '">' + (profit >= 0 ? "+" : "") + fmt(profit) + '</div></div></div>' +
+
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\U0001F4D5 Credit book \u00b7 who owes the shop</div>' +
     (Object.keys(byPerson).length ? Object.entries(byPerson).map(([p, entries]) => {
       const tot = entries.reduce((a, b) => a + +b.amount, 0);
       return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
         '<div class="row" style="border:none;padding:0 0 4px"><span class="red"><b>' + esc(p) + '</b></span><span class="chip chip-red">owes ' + fmt(tot) + '</span></div>' +
-        '<div style="display:flex;gap:7px;flex-wrap:wrap">' + entries.map(r =>
-          '<button class="chip chip-red collectSnack" data-id="' + r.id + '" style="border:1px solid var(--red);cursor:pointer">' + esc(r.item || "items") + (r.qty ? " \u00d7" + r.qty : "") + " \u00b7 " + fmt(r.amount) + ' \u00b7 tap when paid</button>'
-        ).join("") + '</div></div>';
-    }).join("") : '<div class="empty">No credit pending \u2014 all customers settled \u{1F389}</div>') + '</div>' +
+        entries.map(r =>
+          '<div class="row" style="padding:5px 0"><span class="small">' + esc(r.item || "items") + (r.qty ? " \u00d7 " + r.qty : "") + (r.unit_price ? " @ " + fmt(r.unit_price) : "") + ' <span class="muted">\u00b7 ' + dateLabel(r.entry_date) + '</span></span>' +
+          '<span style="display:flex;align-items:center;gap:6px"><b class="red">' + fmt(r.amount) + '</b>' +
+          '<button class="btn btn-ghost btn-sm editSnack" data-id="' + r.id + '" data-item="' + esc(r.item || "") + '" data-qty="' + (r.qty || 1) + '" data-price="' + (r.unit_price || r.amount) + '" data-person="' + esc(r.person || "") + '">\u270E</button>' +
+          '<button class="btn btn-green btn-sm collectSnack" data-id="' + r.id + '" data-person="' + esc(p) + '" data-item="' + esc(r.item || "items") + '" data-amt="' + r.amount + '">\u2713</button></span></div>'
+        ).join("") + '</div>';
+    }).join("") : '<div class="empty">No credit pending \u2014 all customers settled \U0001F389</div>') + '</div>' +
 
-    '<div class="card"><div class="sec-title">\u{1F9FE} Shop ledger \u00b7 stock in & sales out</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\U0001F4E6 Item catalog <span class="small muted">cost \u00b7 sale price \u00b7 margin</span></div>' +
+    (items.length ? items.map(it => {
+      const margin = (it.sale_price && it.cost_price) ? it.sale_price - it.cost_price : null;
+      return '<div class="row"><span>' + esc(it.name) + '</span><span class="small muted">cost ' + (it.cost_price ? fmt(it.cost_price) : "\u2014") + ' \u00b7 sale ' + (it.sale_price ? fmt(it.sale_price) : "\u2014") + (margin !== null ? ' \u00b7 <span class="' + (margin >= 0 ? "green" : "red") + '">margin ' + fmt(margin) + '</span>' : "") + '</span></div>';
+    }).join("") : '<div class="empty">Items appear here automatically as you log stock & sales</div>') + '</div>' +
+
+    '<div class="card"><div class="sec-title">\U0001F9FE Shop ledger \u00b7 stock in & sales out</div>' +
     (rows.length ? rows.slice(0, 50).map(r => {
       const isIn = r.entry_type === "stock_in" || r.entry_type === "investment";
       const isCol = r.entry_type === "collection";
-      const arrow = isIn ? '<span class="chip chip-gold">\u2B07 IN</span>' : isCol ? '<span class="chip chip-green">\u{1F4B5} PAID</span>' : '<span class="chip chip-teal">\u2B06 OUT</span>';
-      const desc = (r.item ? esc(r.item) : (isIn ? "stock purchase" : isCol ? "payment received" : "sale")) + (r.qty ? " \u00d7 " + r.qty : "");
+      const arrow = isIn ? '<span class="chip chip-gold">\u2B07 IN</span>' : isCol ? '<span class="chip chip-green">\U0001F4B5 PAID</span>' : '<span class="chip chip-teal">\u2B06 OUT</span>';
+      const desc = (r.item ? esc(r.item) : (isIn ? "stock purchase" : isCol ? "payment received" : "sale")) + (r.qty ? " \u00d7 " + r.qty : "") + (r.unit_price ? " @ " + fmt(r.unit_price) : "");
       const who = r.person ? (isIn ? " \u00b7 from " + esc(r.person) : " \u00b7 " + esc(r.person)) : "";
       const pay = r.entry_type === "sale" ? (r.status === "pending" ? ' <span class="chip chip-red">credit</span>' : ' <span class="chip chip-green">cash</span>') : "";
       return '<div class="row"><span>' + arrow + " " + desc + '<span class="small muted">' + who + " \u00b7 " + dateLabel(r.entry_date) + (r.note ? " \u00b7 " + esc(r.note) : "") + '</span>' + pay + '</span>' +
-        '<span style="display:flex;align-items:center;gap:6px"><b class="' + (isIn ? "" : "green") + '">' + (isIn ? "\u2212" : "+") + fmt(r.amount) + '</b><button class="del delSnk" data-id="' + r.id + '">\u{1F5D1}</button></span></div>';
-    }).join("") : '<div class="empty">Shop is empty \u2014 add your first stock purchase</div>') + '</div>';
+        '<span style="display:flex;align-items:center;gap:6px"><b class="' + (isIn ? "" : "green") + '">' + (isIn ? "\u2212" : "+") + fmt(r.amount) + '</b><button class="del delSnk" data-id="' + r.id + '">\U0001F5D1</button></span></div>';
+    }).join("") : '<div class="empty">Shop is empty \u2014 add your first stock purchase</div>') + '</div>' +
+    datalist;
 
-  $("addSnackBtn").onclick = () => {
-    openModal('<h3>Shop entry <button class="x" onclick="closeModal()">\u2715</button></h3>' +
-      '<div class="seg" id="snkSeg"><button class="on" data-t="stock_in">\u{1F4E6} Stock in</button><button data-t="sale">\u{1F6D2} Sale</button><button data-t="collection">\u{1F4B5} Payment recd</button></div>' +
-      '<div id="snItemWrap"><label>Item(s)</label><input id="snItem" placeholder="Lays, biscuits, chocolates\u2026"></div>' +
-      '<div id="snQtyWrap"><label>Quantity (optional)</label><input id="snQty" type="number" placeholder="10"></div>' +
-      '<label id="snAmtLbl">Amount spent on stock</label><input id="snAmt" type="number" placeholder="500">' +
-      '<div id="snPersonWrap" class="hidden"><label id="snPersonLbl">Sold to</label><input id="snPerson" placeholder="Name"></div>' +
-      '<div id="snPayWrap" class="hidden"><label>Payment</label><div class="seg" id="snPaySeg"><button class="on" data-p="cash">\u{1F4B5} Cash now</button><button data-p="credit">\u{1F4D5} Credit (pending)</button></div></div>' +
-      '<label>Note (optional)</label><input id="snNote" placeholder="\u2026">' +
-      '<div class="actions"><button class="btn btn-gold" id="snSave">Save entry</button></div>');
-    let type = "stock_in", pay = "cash";
-    document.querySelectorAll("#snkSeg button").forEach(b => b.onclick = () => {
-      document.querySelectorAll("#snkSeg button").forEach(x => x.classList.remove("on"));
-      b.classList.add("on"); type = b.dataset.t;
-      $("snItemWrap").classList.toggle("hidden", type === "collection");
-      $("snQtyWrap").classList.toggle("hidden", type === "collection");
-      $("snPersonWrap").classList.toggle("hidden", type === "stock_in");
-      $("snPayWrap").classList.toggle("hidden", type !== "sale");
-      $("snAmtLbl").textContent = type === "stock_in" ? "Amount spent on stock" : type === "sale" ? "Sale amount" : "Amount received";
-      $("snPersonLbl").textContent = type === "sale" ? "Sold to" : "Received from";
-    });
-    document.querySelectorAll("#snPaySeg button").forEach(b => b.onclick = () => {
-      document.querySelectorAll("#snPaySeg button").forEach(x => x.classList.remove("on"));
-      b.classList.add("on"); pay = b.dataset.p;
-    });
-    $("snSave").onclick = async () => {
-      const amt = +$("snAmt").value; if (!amt) { toast("Enter amount"); return; }
-      if (type === "sale" && !$("snPerson").value.trim() && pay === "credit") { toast("Credit sale needs a name"); return; }
-      await sbInsert("snack_entries", {
-        entry_type: type, amount: amt,
-        item: $("snItem").value.trim() || null,
-        qty: +$("snQty").value || null,
-        person: $("snPerson").value.trim() || null,
-        payment: type === "sale" ? pay : null,
-        status: (type === "sale" && pay === "credit") ? "pending" : "done",
-        note: $("snNote").value || null
-      });
-      closeModal(); toast("Shop entry saved \u{1F9FE}"); renderSnacks();
+  $("addSnackBtn").onclick = () => snackEntryModal(itemMap);
+
+  $("main").querySelectorAll(".editSnack").forEach(b => b.onclick = () => snackEditModal(b.dataset));
+
+  $("main").querySelectorAll(".collectSnack").forEach(b => b.onclick = () => {
+    openModal('<h3>Collect from ' + b.dataset.person + ' <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+      '<p class="small muted">' + esc(b.dataset.item) + ' \u00b7 ' + fmt(b.dataset.amt) + '</p>' +
+      '<label>Received into</label><select id="snkColAcc">' + accountOptions() + '</select>' +
+      '<div class="actions"><button class="btn btn-green" id="snkColSave">Confirm \u00b7 ' + fmt(b.dataset.amt) + '</button></div>');
+    $("snkColSave").onclick = async () => {
+      await sbUpdate("snack_entries", "id=eq." + b.dataset.id, { status: "done" });
+      await sbInsert("incomes", { source: b.dataset.person + " - " + b.dataset.item, amount: +b.dataset.amt, account_id: +$("snkColAcc").value });
+      closeModal(); toast("Credit collected \u2713"); renderSnacks();
     };
-  };
-  $("main").querySelectorAll(".collectSnack").forEach(b => b.onclick = async () => {
-    await sbUpdate("snack_entries", "id=eq." + b.dataset.id, { status: "done" });
-    toast("Credit collected \u2713"); renderSnacks();
   });
   $("main").querySelectorAll(".delSnk").forEach(b => b.onclick = async () => {
     if (!confirm("Delete this ledger entry?")) return;
@@ -1230,112 +1270,212 @@ async function renderSnacks() {
   });
 }
 
-/* =====================================================
-   HEALTH — meals + auto calories + burned
-===================================================== */
-const CAL_DB = {
-  "idli":58,"dosa":170,"masala dosa":390,"set dosa":180,"vada":130,"medu vada":130,"sambar":65,"chutney":45,
-  "pongal":280,"upma":250,"poori":150,"puri":150,"chapati":105,"roti":105,"paratha":260,"parotta":300,
-  "kothu parotta":500,"idiyappam":130,"appam":120,"puttu":200,"white rice":200,"rice":200,"curd rice":250,
-  "sambar rice":300,"lemon rice":280,"tamarind rice":290,"veg biryani":400,"chicken biryani":500,
-  "mutton biryani":550,"biryani":450,"fried rice":350,"noodles":350,"egg":78,"boiled egg":78,"omelette":150,
-  "half boil":90,"chicken curry":280,"chicken 65":290,"chicken":250,"grill chicken":300,"fish fry":220,
-  "fish curry":180,"fish":180,"mutton":320,"prawn":200,"dal":150,"rasam":60,"curd":60,"buttermilk":35,
-  "milk":120,"tea":40,"coffee":60,"black coffee":5,"green tea":2,"boost":140,"horlicks":130,"juice":110,
-  "banana":105,"apple":95,"orange":62,"mango":150,"grapes":60,"watermelon":46,"papaya":55,"guava":68,
-  "bread":70,"toast":85,"sandwich":250,"burger":350,"pizza":285,"samosa":130,"bonda":120,"bajji":90,
-  "murukku":100,"biscuit":50,"chips":150,"chocolate":230,"ice cream":200,"cake":350,"gulab jamun":150,
-  "payasam":250,"halwa":300,"sundal":130,"pani puri":150,"vada pav":290,"salad":80,"oats":150,
-  "cornflakes":130,"maggi":350,"momos":200,"shawarma":400,"soup":100,"lassi":150,"soda":90,"cool drink":140,
-  "tender coconut":45,"sprouts":100,"peanuts":160,"cashew":160,"protein shake":180,"ragi":120,"kanji":120
-};
-function estimateCalories(text) {
-  const t = text.toLowerCase();
-  let total = 0; const found = [];
-  const keys = Object.keys(CAL_DB).sort((a, b) => b.length - a.length);
-  let scan = t;
-  keys.forEach(k => {
-    let idx = scan.indexOf(k);
-    while (idx !== -1) {
-      let qty = 1;
-      const before = scan.slice(Math.max(0, idx - 4), idx).match(/(\d+)\s*$/);
-      if (before) qty = Math.min(+before[1], 20);
-      total += CAL_DB[k] * qty;
-      found.push(k + (qty > 1 ? " \u00d7" + qty : ""));
-      scan = scan.slice(0, idx) + "#".repeat(k.length) + scan.slice(idx + k.length);
-      idx = scan.indexOf(k);
-    }
-  });
-  return { total: total, found: found };
+async function upsertSnackItem(name, field, value) {
+  if (!name) return;
+  const existing = await sbQuery("snack_items", "select=id&name=ilike." + encodeURIComponent(name));
+  if (existing.length) await sbUpdate("snack_items", "id=eq." + existing[0].id, { [field]: value });
+  else await sbInsert("snack_items", { name: name, [field]: value });
 }
 
+function snackEntryModal(itemMap) {
+  openModal('<h3>Shop entry <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+    '<div class="seg" id="snkSeg"><button class="on" data-t="stock_in">\U0001F4E6 Stock in</button><button data-t="sale">\U0001F6D2 Sale</button><button data-t="collection">\U0001F4B5 Payment recd</button></div>' +
+    '<div id="snItemWrap"><label>Item</label><input id="snItem" list="snkItems" placeholder="Lays, biscuits, chocolates\u2026"></div>' +
+    '<div id="snQtyWrap" class="form-grid">' +
+      '<div><label id="snQtyLbl">Quantity</label><input id="snQty" type="number" value="1"></div>' +
+      '<div><label id="snPriceLbl">Cost per unit</label><input id="snPrice" type="number" step="0.01" placeholder="10"></div>' +
+    '</div>' +
+    '<div id="snTotalWrap" class="small muted" style="margin:6px 0 4px">Total: \u20b90</div>' +
+    '<div id="snColWrap" class="hidden"><label>Amount received</label><input id="snColAmt" type="number" placeholder="500"></div>' +
+    '<div id="snPersonWrap" class="hidden"><label id="snPersonLbl">Sold to</label><input id="snPerson" placeholder="Name"></div>' +
+    '<div id="snPayWrap" class="hidden"><label>Payment</label><div class="seg" id="snPaySeg"><button class="on" data-p="cash">\U0001F4B5 Cash now</button><button data-p="credit">\U0001F4D5 Credit (pending)</button></div></div>' +
+    '<div id="snAccWrap"><label id="snAccLbl">Paid from</label><select id="snAcc">' + accountOptions() + '</select></div>' +
+    '<label>Note (optional)</label><input id="snNote" placeholder="\u2026">' +
+    '<div class="actions"><button class="btn btn-gold" id="snSave">Save entry</button></div>');
+
+  let type = "stock_in", pay = "cash";
+  const recalc = () => {
+    const qty = +$("snQty").value || 0, price = +$("snPrice").value || 0;
+    $("snTotalWrap").textContent = "Total: " + fmt(qty * price);
+  };
+  $("snQty").oninput = recalc; $("snPrice").oninput = recalc;
+
+  $("snItem").oninput = () => {
+    const it = itemMap[$("snItem").value.trim().toLowerCase()];
+    if (!it) return;
+    if (type === "stock_in" && it.cost_price && !$("snPrice").value) $("snPrice").value = it.cost_price;
+    if (type === "sale" && it.sale_price && !$("snPrice").value) $("snPrice").value = it.sale_price;
+    recalc();
+  };
+
+  function setType(t) {
+    type = t;
+    $("snItemWrap").classList.toggle("hidden", t === "collection");
+    $("snQtyWrap").classList.toggle("hidden", t === "collection");
+    $("snTotalWrap").classList.toggle("hidden", t === "collection");
+    $("snColWrap").classList.toggle("hidden", t !== "collection");
+    $("snPersonWrap").classList.toggle("hidden", t === "stock_in");
+    $("snPayWrap").classList.toggle("hidden", t !== "sale");
+    $("snAccWrap").classList.toggle("hidden", t === "sale" && pay === "credit");
+    $("snQtyLbl").textContent = "Quantity";
+    $("snPriceLbl").textContent = t === "stock_in" ? "Cost per unit" : "Sale price per unit";
+    $("snPersonLbl").textContent = t === "sale" ? "Sold to" : "Received from";
+    $("snAccLbl").textContent = t === "stock_in" ? "Paid from" : "Received into";
+    $("snPrice").value = ""; recalc();
+  }
+  document.querySelectorAll("#snkSeg button").forEach(b => b.onclick = () => {
+    document.querySelectorAll("#snkSeg button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on"); setType(b.dataset.t);
+  });
+  document.querySelectorAll("#snPaySeg button").forEach(b => b.onclick = () => {
+    document.querySelectorAll("#snPaySeg button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on"); pay = b.dataset.p;
+    $("snAccWrap").classList.toggle("hidden", pay === "credit");
+  });
+
+  $("snSave").onclick = async () => {
+    const item = $("snItem").value.trim();
+    if (type === "collection") {
+      const amt = +$("snColAmt").value; if (!amt) { toast("Enter amount"); return; }
+      const person = $("snPerson").value.trim();
+      await sbInsert("snack_entries", { entry_type: "collection", amount: amt, person: person || null, status: "done", entry_date: todayStr(), account_id: +$("snAcc").value, note: $("snNote").value || null });
+      await sbInsert("incomes", { source: (person || "Shop") + " - payment", amount: amt, account_id: +$("snAcc").value });
+      closeModal(); toast("Payment recorded \U0001F9FE"); renderSnacks();
+      return;
+    }
+    const qty = +$("snQty").value || 1, price = +$("snPrice").value;
+    if (!item || !price) { toast("Item and price needed"); return; }
+    const total = qty * price;
+    if (type === "stock_in") {
+      await upsertSnackItem(item, "cost_price", price);
+      await sbInsert("snack_entries", { entry_type: "stock_in", item: item, qty: qty, unit_price: price, amount: total, entry_date: todayStr(), account_id: +$("snAcc").value, note: $("snNote").value || null });
+      await sbInsert("spends", { item: "Snack stock: " + item, amount: total, account_id: +$("snAcc").value, category: "Snacks stock" });
+      closeModal(); toast(item + " stocked \u00b7 " + fmt(total)); renderSnacks();
+    } else {
+      if (pay === "credit" && !$("snPerson").value.trim()) { toast("Credit sale needs a name"); return; }
+      await upsertSnackItem(item, "sale_price", price);
+      const person = $("snPerson").value.trim();
+      await sbInsert("snack_entries", { entry_type: "sale", item: item, qty: qty, unit_price: price, amount: total, person: person || null, payment: pay, status: pay === "credit" ? "pending" : "done", entry_date: todayStr(), account_id: pay === "cash" ? +$("snAcc").value : null, note: $("snNote").value || null });
+      if (pay === "cash") await sbInsert("incomes", { source: (person ? person + " - " : "") + item + " sale", amount: total, account_id: +$("snAcc").value });
+      closeModal(); toast(item + " sold \u00b7 " + fmt(total)); renderSnacks();
+    }
+  };
+  setType("stock_in");
+}
+
+function snackEditModal(d) {
+  openModal('<h3>Edit entry <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+    '<label>Item</label><input id="seItem" value="' + esc(d.item) + '">' +
+    '<div class="form-grid"><div><label>Quantity</label><input id="seQty" type="number" value="' + d.qty + '"></div>' +
+    '<div><label>Price per unit</label><input id="sePrice" type="number" step="0.01" value="' + d.price + '"></div></div>' +
+    '<div id="seTotal" class="small muted" style="margin:6px 0 4px">Total: ' + fmt(d.qty * d.price) + '</div>' +
+    '<label>Person</label><input id="sePerson" value="' + esc(d.person) + '">' +
+    '<div class="actions"><button class="btn btn-red" id="seDel">Delete</button><button class="btn btn-gold" id="seSave">Save</button></div>');
+  const recalc = () => { $("seTotal").textContent = "Total: " + fmt((+$("seQty").value || 0) * (+$("sePrice").value || 0)); };
+  $("seQty").oninput = recalc; $("sePrice").oninput = recalc;
+  $("seSave").onclick = async () => {
+    const qty = +$("seQty").value || 1, price = +$("sePrice").value || 0;
+    await sbUpdate("snack_entries", "id=eq." + d.id, { item: $("seItem").value.trim(), qty: qty, unit_price: price, amount: qty * price, person: $("sePerson").value.trim() || null });
+    closeModal(); toast("Updated \u2713"); renderSnacks();
+  };
+  $("seDel").onclick = async () => {
+    if (!confirm("Delete this entry?")) return;
+    await sbDelete("snack_entries", "id=eq." + d.id); closeModal(); renderSnacks();
+  };
+}
+
+/* =====================================================
+   HEALTH \u2014 date-wise meal log (Excel-style)
+===================================================== */
+const MEALS = ["breakfast", "lunch", "dinner", "snacks"];
+const MEAL_ICONS = { breakfast: "\U0001F305", lunch: "\u2600\uFE0F", dinner: "\U0001F319", snacks: "\U0001F36A" };
+const MEAL_LABELS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snacks: "Snacks" };
+let healthDays = 14;
+
 async function renderHealth() {
-  const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
-  const rows = await sbQuery("health_logs", "select=*&log_date=gte." + weekAgo + "&order=log_date.desc,logged_at.desc");
+  const since = new Date(Date.now() - (healthDays - 1) * 864e5).toISOString().slice(0, 10);
+  const rows = await sbQuery("health_logs", "select=*&log_date=gte." + since + "&order=log_date.desc,logged_at.asc");
   if (activeTab !== "health") return;
   const today = todayStr();
-  const todayRows = rows.filter(r => r.log_date === today);
-  const calIn = todayRows.filter(r => r.log_type === "food").reduce((a, b) => a + +(b.calories || 0), 0);
-  const calBurn = todayRows.filter(r => r.log_type === "burned").reduce((a, b) => a + +(b.value_num || 0), 0);
+
+  // Build date list (most recent first)
+  const dates = [];
+  for (let i = 0; i < healthDays; i++) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+
+  // Group rows by date
+  const byDate = {};
+  dates.forEach(d => byDate[d] = { food: {}, vitals: [] });
+  rows.forEach(r => {
+    if (!byDate[r.log_date]) byDate[r.log_date] = { food: {}, vitals: [] };
+    if (r.log_type === "food") byDate[r.log_date].food[r.meal_type] = r;
+    else byDate[r.log_date].vitals.push(r);
+  });
+
+  // Build autocomplete suggestions per meal type from history
+  const sugg = { breakfast: new Set(), lunch: new Set(), dinner: new Set(), snacks: new Set() };
+  rows.forEach(r => { if (r.log_type === "food" && r.value_text) sugg[r.meal_type] && sugg[r.meal_type].add(r.value_text); });
+  const datalists = MEALS.map(mt =>
+    '<datalist id="dl_' + mt + '">' + Array.from(sugg[mt]).slice(0, 30).map(v => '<option value="' + esc(v) + '">').join("") + '</datalist>'
+  ).join("");
+
   const sleepRows = rows.filter(r => r.log_type === "sleep");
   const avgSleep = sleepRows.length ? (sleepRows.reduce((a, b) => a + +b.value_num, 0) / sleepRows.length).toFixed(1) : "\u2014";
   const hrRows = rows.filter(r => r.log_type === "heart_rate");
   const avgHr = hrRows.length ? Math.round(hrRows.reduce((a, b) => a + +b.value_num, 0) / hrRows.length) : "\u2014";
-  const MEALS = ["breakfast", "lunch", "dinner", "snacks"];
-  const mealIcons = { breakfast: "\u{1F305}", lunch: "\u2600\uFE0F", dinner: "\u{1F319}", snacks: "\u{1F36A}" };
+  const burnRows = rows.filter(r => r.log_type === "burned" && r.log_date === today);
+  const burnToday = burnRows.reduce((a, b) => a + +b.value_num, 0);
 
   $("main").innerHTML =
-    '<div class="page-title"><span>\u2764\uFE0F Health</span><div style="display:flex;gap:8px"><button class="btn btn-gold btn-sm" id="addMealBtn">+ Meal</button><button class="btn btn-ghost btn-sm" id="addVitalBtn">+ Sleep / HR / Burned</button></div></div>' +
+    '<div class="page-title"><span>\u2764\uFE0F Health log</span><div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-ghost btn-sm" id="copyLogBtn">\U0001F4CB Copy log</button>' +
+      '<button class="btn btn-ghost btn-sm" id="addVitalBtn">+ Sleep / HR / Burned</button>' +
+      '<button class="btn btn-gold btn-sm" id="addMealBtn">+ Meal</button></div></div>' +
     '<div class="grid g4" style="margin-bottom:14px">' +
-      '<div class="card stat"><div class="lbl">\u{1F525} Calories in today</div><div class="val">' + Math.round(calIn) + '<span class="small muted"> kcal</span></div></div>' +
-      '<div class="card stat"><div class="lbl">\u{1F3C3} Burned today</div><div class="val">' + Math.round(calBurn) + '<span class="small muted"> kcal</span></div></div>' +
-      '<div class="card stat"><div class="lbl">\u2696\uFE0F Net today</div><div class="val ' + (calIn - calBurn > 2200 ? "red" : "green") + '">' + Math.round(calIn - calBurn) + '</div></div>' +
-      '<div class="card stat"><div class="lbl">\u{1F634} Avg sleep \u00b7 \u{1F493} HR (7d)</div><div class="val" style="font-size:19px">' + avgSleep + ' hrs \u00b7 ' + avgHr + ' bpm</div></div></div>' +
+      '<div class="card stat"><div class="lbl">\U0001F634 Avg sleep (' + healthDays + 'd)</div><div class="val">' + avgSleep + '<span class="small muted"> hrs</span></div></div>' +
+      '<div class="card stat"><div class="lbl">\U0001F493 Avg heart rate (' + healthDays + 'd)</div><div class="val">' + avgHr + '<span class="small muted"> bpm</span></div></div>' +
+      '<div class="card stat"><div class="lbl">\U0001F3C3 Burned today</div><div class="val">' + Math.round(burnToday) + '<span class="small muted"> kcal</span></div></div>' +
+      '<div class="card stat"><div class="lbl">\U0001F4C5 Showing</div><div class="val" style="font-size:19px">last ' + healthDays + ' days</div>' +
+        '<button class="btn btn-ghost btn-sm" id="moreDaysBtn" style="margin-top:8px">Show 30 days</button></div></div>' +
 
-    '<div class="card" style="margin-bottom:14px"><div class="sec-title">\u{1F37D} Today\u2019s meals</div>' +
-    MEALS.map(mt => {
-      const meals = todayRows.filter(r => r.log_type === "food" && r.meal_type === mt);
-      const mcal = meals.reduce((a, b) => a + +(b.calories || 0), 0);
-      return '<div class="row"><span>' + mealIcons[mt] + ' <b style="text-transform:capitalize">' + mt + '</b><br><span class="small muted">' + (meals.length ? meals.map(x => esc(x.value_text)).join(", ") : "nothing logged yet") + '</span></span>' +
-        '<span class="chip ' + (mcal ? "chip-gold" : "chip-teal") + '">' + Math.round(mcal) + ' kcal</span></div>';
-    }).join("") + '</div>' +
+    '<div class="card" style="overflow-x:auto"><div class="sec-title">\U0001F37D Daily log</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px">' +
+    '<thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)">Date</th>' +
+    MEALS.map(mt => '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)">' + MEAL_ICONS[mt] + ' ' + MEAL_LABELS[mt] + '</th>').join("") +
+    '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)">Vitals</th></tr></thead><tbody>' +
+    dates.map(d => {
+      const day = byDate[d];
+      const vitalsTxt = day.vitals.map(v => {
+        if (v.log_type === "sleep") return "\U0001F634" + v.value_num + "h";
+        if (v.log_type === "heart_rate") return "\U0001F493" + v.value_num;
+        if (v.log_type === "burned") return "\U0001F3C3" + v.value_num;
+        if (v.log_type === "weight") return "\u2696" + v.value_num + "kg";
+        return "";
+      }).join(" ");
+      return '<tr' + (d === today ? ' style="background:var(--gold-bg)"' : '') + '>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap"><b>' + dateLabel(d) + '</b>' + (d === today ? ' <span class="small gold">today</span>' : "") + '</td>' +
+        MEALS.map(mt => {
+          const f = day.food[mt];
+          return '<td style="padding:6px 8px;border-bottom:1px solid var(--border);cursor:pointer" class="mealCell" data-date="' + d + '" data-meal="' + mt + '" data-text="' + esc(f ? f.value_text : "") + '" data-id="' + (f ? f.id : "") + '">' +
+            (f ? esc(f.value_text) : '<span class="muted">+ add</span>') + '</td>';
+        }).join("") +
+        '<td style="padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap" class="small muted">' + (vitalsTxt || "\u2014") + '</td>' +
+        '</tr>';
+    }).join("") +
+    '</tbody></table></div>' +
+    '<p class="small muted" style="margin-top:12px">\U0001F4A1 Tap any cell to add or edit what you ate. Use \u201CCopy log\u201D at month-end to paste into an AI tool for a nutrition report \u2014 calories aren\u2019t auto-calculated here.</p>' +
+    datalists;
 
-    '<div class="card"><div class="sec-title">Last 7 days</div>' +
-    (rows.length ? rows.slice(0, 40).map(r => {
-      const icon = { food: mealIcons[r.meal_type] || "\u{1F37D}", sleep: "\u{1F634}", heart_rate: "\u{1F493}", weight: "\u2696\uFE0F", burned: "\u{1F3C3}" }[r.log_type] || "\u{1F4DD}";
-      const val = r.log_type === "food" ? esc(r.value_text) + (r.calories ? ' <span class="small gold">' + Math.round(r.calories) + ' kcal</span>' : "")
-        : r.value_num + (r.log_type === "sleep" ? " hrs" : r.log_type === "heart_rate" ? " bpm" : r.log_type === "burned" ? " kcal burned" : " kg");
-      return '<div class="row"><span>' + icon + " " + val + '</span><span class="small muted">' + dateLabel(r.log_date) + (r.meal_type ? " \u00b7 " + r.meal_type : "") + '</span></div>';
-    }).join("") : '<div class="empty">Nothing logged this week</div>') + '</div>' +
-    '<p class="small muted" style="margin-top:12px">\u{1F4A1} Calories auto-estimated from food names (Indian food database built-in). Burned kcal: copy the number from your Apple Watch activity ring each evening \u2014 auto-sync via iPhone Shortcut can be added later.</p>';
+  $("main").querySelectorAll(".mealCell").forEach(td => td.onclick = () => mealCellModal(td.dataset, sugg));
+  $("addMealBtn").onclick = () => mealCellModal({ date: todayStr(), meal: "breakfast", text: "", id: "" }, sugg);
+  $("moreDaysBtn").onclick = () => { healthDays = healthDays === 14 ? 30 : 14; renderHealth(); };
+  $("copyLogBtn").onclick = () => copyHealthLog(dates, byDate);
 
-  $("addMealBtn").onclick = () => {
-    openModal('<h3>Log a meal <button class="x" onclick="closeModal()">\u2715</button></h3>' +
-      '<div class="seg" id="mealSeg"><button class="on" data-m="breakfast">\u{1F305}</button><button data-m="lunch">\u2600\uFE0F</button><button data-m="dinner">\u{1F319}</button><button data-m="snacks">\u{1F36A}</button></div>' +
-      '<label>What did you eat? (e.g. "3 idli, sambar, tea")</label><input id="mealText" placeholder="3 idli, sambar, 1 tea">' +
-      '<div class="small muted" id="calHint" style="margin-top:6px;min-height:18px"></div>' +
-      '<label>Calories (auto-filled, edit if needed)</label><input id="mealCal" type="number" placeholder="0">' +
-      '<label>Date</label><input id="mealDate" type="date" value="' + todayStr() + '">' +
-      '<div class="actions"><button class="btn btn-gold" id="mealSave">Save meal</button></div>');
-    let mealType = "breakfast";
-    document.querySelectorAll("#mealSeg button").forEach(b => b.onclick = () => {
-      document.querySelectorAll("#mealSeg button").forEach(x => x.classList.remove("on"));
-      b.classList.add("on"); mealType = b.dataset.m;
-    });
-    $("mealText").oninput = () => {
-      const est = estimateCalories($("mealText").value);
-      $("mealCal").value = est.total || "";
-      $("calHint").innerHTML = est.found.length ? "\u2713 matched: " + est.found.join(", ") + " = <b>" + est.total + " kcal</b>" : "type food names \u2014 I\u2019ll calculate";
-    };
-    $("mealSave").onclick = async () => {
-      const t = $("mealText").value.trim(); if (!t) { toast("Enter what you ate"); return; }
-      await sbInsert("health_logs", { log_type: "food", meal_type: mealType, value_text: t, calories: +$("mealCal").value || null, log_date: $("mealDate").value });
-      closeModal(); toast("Meal logged \u00b7 " + (+$("mealCal").value || 0) + " kcal"); renderHealth();
-    };
-  };
   $("addVitalBtn").onclick = () => {
     openModal('<h3>Log vitals <button class="x" onclick="closeModal()">\u2715</button></h3>' +
-      '<div class="seg" id="vitSeg"><button class="on" data-t="sleep">\u{1F634} Sleep</button><button data-t="heart_rate">\u{1F493} HR</button><button data-t="burned">\u{1F3C3} Burned</button><button data-t="weight">\u2696\uFE0F</button></div>' +
+      '<div class="seg" id="vitSeg"><button class="on" data-t="sleep">\U0001F634 Sleep</button><button data-t="heart_rate">\U0001F493 HR</button><button data-t="burned">\U0001F3C3 Burned</button><button data-t="weight">\u2696\uFE0F Weight</button></div>' +
       '<label id="vitLbl">Hours slept</label><input id="vitVal" type="number" step="0.1" placeholder="7.5">' +
       '<label>Date</label><input id="vitDate" type="date" value="' + todayStr() + '">' +
       '<div class="actions"><button class="btn btn-gold" id="vitSave">Save</button></div>');
@@ -1351,6 +1491,45 @@ async function renderHealth() {
       closeModal(); toast("Logged \u2713"); renderHealth();
     };
   };
+}
+
+function mealCellModal(d, sugg) {
+  const mt = d.meal;
+  openModal('<h3>' + MEAL_ICONS[mt] + ' ' + MEAL_LABELS[mt] + ' \u00b7 ' + dateLabel(d.date) + ' <button class="x" onclick="closeModal()">\u2715</button></h3>' +
+    '<label>What did you eat?</label><input id="mcText" list="dl_' + mt + '" value="' + esc(d.text || "") + '" placeholder="e.g. 2 dosa, chicken gravy">' +
+    '<p class="small muted" style="margin-top:6px">Type freely \u2014 your past entries show up as suggestions.</p>' +
+    '<div class="actions">' +
+    (d.id ? '<button class="btn btn-red" id="mcDel">Clear</button>' : '') +
+    '<button class="btn btn-gold" id="mcSave">Save</button></div>');
+  $("mcText").focus();
+  $("mcSave").onclick = async () => {
+    const t = $("mcText").value.trim();
+    if (!t) { toast("Enter something or tap Clear"); return; }
+    if (d.id) await sbUpdate("health_logs", "id=eq." + d.id, { value_text: t });
+    else await sbInsert("health_logs", { log_type: "food", meal_type: mt, value_text: t, log_date: d.date });
+    closeModal(); toast("Saved \u2713"); renderHealth();
+  };
+  if (d.id) {
+    $("mcDel").onclick = async () => {
+      await sbDelete("health_logs", "id=eq." + d.id);
+      closeModal(); toast("Cleared"); renderHealth();
+    };
+  }
+}
+
+function copyHealthLog(dates, byDate) {
+  let txt = "RaptorVault \u2014 Food log\n\n";
+  dates.slice().reverse().forEach(d => {
+    const day = byDate[d];
+    const hasFood = MEALS.some(mt => day.food[mt]);
+    if (!hasFood) return;
+    txt += dateLabel(d) + " (" + d + ")\n";
+    MEALS.forEach(mt => {
+      if (day.food[mt]) txt += "  " + MEAL_LABELS[mt] + ": " + day.food[mt].value_text + "\n";
+    });
+    txt += "\n";
+  });
+  navigator.clipboard.writeText(txt).then(() => toast("Log copied \u2713 paste into your AI tool")).catch(() => toast("Could not copy"));
 }
 
 /* ---------------- Init ---------------- */
